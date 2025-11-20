@@ -247,11 +247,14 @@ export default function Home() {
     const [autoPlay, setAutoPlay] = useState<boolean>(false);
     const timerRef = useRef<number | null>(null);
     const [showSlideshow, setShowSlideshow] = useState<boolean>(false);
+    const [prevCurrent, setPrevCurrent] = useState<number>(0);
+    const [slideDir, setSlideDir] = useState<"left" | "right">("right");
 
     useEffect(() => {
         if (!autoPlay || totalSlides === 0) return;
         if (timerRef.current) window.clearTimeout(timerRef.current);
         timerRef.current = window.setTimeout(() => {
+            setSlideDir("right");
             setCurrent((c) => (c + 1) % totalSlides);
         }, 4000);
         return () => {
@@ -259,14 +262,23 @@ export default function Home() {
         };
     }, [autoPlay, current, totalSlides]);
 
+
     const goPrev = useCallback(() => {
         if (totalSlides === 0) return;
-        setCurrent((c) => (c - 1 + totalSlides) % totalSlides);
+        setSlideDir("left");
+        setCurrent((c) => {
+            setPrevCurrent(c);
+            return (c - 1 + totalSlides) % totalSlides;
+        });
     }, [totalSlides]);
 
     const goNext = useCallback(() => {
         if (totalSlides === 0) return;
-        setCurrent((c) => (c + 1) % totalSlides);
+        setSlideDir("right");
+        setCurrent((c) => {
+            setPrevCurrent(c);
+            return (c + 1) % totalSlides;
+        });
     }, [totalSlides]);
 
     const handleGenerate = async () => {
@@ -301,6 +313,7 @@ export default function Home() {
             setData(json);
             setSelectedHero(json.defaultHeroIndex ?? 0);
             setShowSlideshow(true);
+            setAutoPlay(true);
         } catch (e: any) {
             setError(e?.message || "Có lỗi xảy ra");
         } finally {
@@ -568,7 +581,7 @@ export default function Home() {
                     <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
                         <button
                             className="rounded-full border px-3 py-1 hover:bg-black/5 dark:hover:bg-white/5"
-                            onClick={() => setShowSlideshow(true)}
+                            onClick={() => { setShowSlideshow(true); setAutoPlay(true); }}
                         >
                             Mở toàn màn hình
                         </button>
@@ -735,8 +748,14 @@ export default function Home() {
                             style={{height: "100vh", aspectRatio: "9 / 16"}}
                             onClick={(e) => e.stopPropagation()}
                         >
-                            {/* Slide content */}
-                            {renderFullscreenSlide()}
+                            {/* Animated slide container */}
+                            <div key={current} className={`absolute inset-0 ${slideDir === 'right' ? 'animate-slide-in-right' : 'animate-slide-in-left'}`}>
+                                {/* Slide content */}
+                                {renderFullscreenSlide()}
+                            </div>
+
+                            {/* Top gradient for readability */}
+                            <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/70 via-black/30 to-transparent" />
 
                             {/* Controls overlay */}
                             <div className="pointer-events-auto absolute inset-x-0 top-0 flex items-center justify-between p-3 text-white">
@@ -852,8 +871,9 @@ function Typewriter({
 }
 
 
+
 // Mission card component
-type UserPayload = {
+ type UserPayload = {
     completedOrders: number;
     serviceIds: string[];
     subscriptions: string[];
