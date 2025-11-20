@@ -1,65 +1,888 @@
-import Image from "next/image";
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+type GenerateResponse = {
+  images: string[];
+  stories: string[];
+  userSlide: {
+    title: string;
+    stats: {
+      completedOrders: number;
+      reliableShippers: number;
+      avgDeliveryMins: number;
+      fastestDeliveryMins: number;
+    };
+    summary: string;
+  };
+  heroes: string[];
+  defaultHeroIndex: number;
+};
+
+type UserInfo = {
+  completedOrders: number;
+  serviceIdsInput: string; // CSV trong input, sẽ tách thành mảng khi gửi API
+  subscriptionsInput: string; // CSV trong input, sẽ tách thành mảng khi gửi API
+  totalSpentVnd: number;
+  dateRange: string;
+};
+
+// Nhiệm vụ gợi ý sau khi chọn anh hùng
+type Mission = {
+  id: string;
+  title: string;
+  summary: string;
+  steps: string[];
+  prompt?: {
+    kind: "image" | "content";
+    text: string;
+  };
+  cta?: {
+    label: string;
+    url: string;
+  };
+};
+
+function buildMissions(heroName: string, u: UserInfo): Mission[] {
+  const userSummary = `Đơn: ${u.completedOrders} • Dịch vụ: ${u.serviceIdsInput || "(chưa nhập)"} • Gói: ${u.subscriptionsInput || "(chưa nhập)"} • Chi tiêu: ${new Intl.NumberFormat("vi-VN").format(Number(u.totalSpentVnd || 0))}₫ • Thời gian: ${u.dateRange || "12 tháng qua"}`;
+
+  const brandTips = "Màu thương hiệu Ahamove: cam, trắng, xanh đậm; tông hiện đại, ấm áp, thân thiện.";
+
+  return [
+    {
+      id: "ai-image",
+      title: `Tạo hình ảnh bằng AI Ahamove cho "${heroName}"`,
+      summary:
+        "Tạo một hình minh họa thương hiệu thể hiện phiên bản anh hùng của bạn để dùng làm bìa bài đăng, avatar sự kiện hoặc slide mở đầu.",
+      steps: [
+        "Mở công cụ AI của Ahamove (hoặc Gemini tương thích).",
+        "Dán prompt gợi ý bên dưới và điều chỉnh thêm chi tiết riêng của bạn.",
+        "Chọn tỷ lệ 9:16, độ chi tiết vừa phải, ánh sáng mềm.",
+        "Tải xuống và dùng cho bài đăng/slide của bạn.",
+      ],
+      prompt: {
+        kind: "image",
+        text: [
+          `Minh họa phong cách hero cho Ahamove: "${heroName}".`,
+          "Bối cảnh thành phố năng động, đường đi giao hàng, tài xế tin cậy.",
+          "Thêm UI-floating tinh tế: thẻ lịch sử đơn, số liệu, xu/coin.",
+          brandTips,
+          `Thông tin người dùng: ${userSummary}.`,
+          "Chi tiết cao, sạch, chuyên nghiệp, phù hợp làm slide ứng dụng.",
+        ].join(" \n"),
+      },
+      cta: { label: "Thử tạo ngay", url: "https://ai.ahamove.example/studio" },
+    },
+    {
+      id: "ai-content",
+      title: `Viết nội dung bằng AI Ahamove cho chiến dịch "${heroName}"`,
+      summary:
+        "Tạo caption/bài viết ngắn gọn, lạc quan để chia sẻ hành trình và lời hứa dịch vụ năm tới.",
+      steps: [
+        "Mở công cụ tạo nội dung AI của Ahamove.",
+        "Chọn giọng điệu thân thiện, chuyên nghiệp, tối đa 120–150 từ.",
+        "Nêu lợi ích rõ ràng, CTA đặt đơn nhanh, và hashtag phù hợp.",
+      ],
+      prompt: {
+        kind: "content",
+        text: [
+          `Viết 1 caption tiếng Việt ≤ 120 từ, giọng thân thiện, hiện đại, theo chủ đề anh hùng "${heroName}".`,
+          `Tóm tắt hành trình năm qua và cam kết năm tới. ${userSummary}.`,
+          "Nhắc đến ưu điểm: tốc độ, độ tin cậy, định tuyến thông minh, dự đoán thời gian giao.",
+          "Kết bằng CTA: Đặt đơn ngay hôm nay. Thêm 3 hashtag phù hợp.",
+        ].join(" \n"),
+      },
+      cta: { label: "Tạo caption ngay", url: "https://ai.ahamove.example/content" },
+    },
+    {
+      id: "optimize-ops",
+      title: "Tối ưu vận hành với Chat‑to‑Book",
+      summary:
+        "Dùng Chat‑to‑Book để đặt đơn nhanh, lưu mẫu, và tự động gợi ý lộ trình — tiết kiệm thời gian và giảm sai sót.",
+      steps: [
+        "Mở Chat‑to‑Book và gõ: 'Đặt đơn từ [địa chỉ A] đến [địa chỉ B] lúc [giờ]'.",
+        "Lưu mẫu cho các tuyến lặp lại (ví dụ giao sáng/chiều hàng ngày).",
+        "Bật gợi ý lộ trình thông minh và thông báo trạng thái theo thời gian thực.",
+      ],
+      cta: { label: "Mở Chat‑to‑Book", url: "https://chat.ahamove.com/" },
+    },
+    {
+      id: "driver-social-ads",
+      title: "Quảng bá cửa hàng tới tài xế Ahamove",
+      summary:
+        "Lan tỏa ưu đãi dành riêng cho tài xế: tăng nhận diện, kích hoạt mua nhanh quanh khu vực hoạt động của tài xế.",
+      steps: [
+        "Chuẩn bị bài đăng/ảnh bìa (dùng hình AI ở nhiệm vụ 1).",
+        "Sử dụng mẫu nội dung gợi ý bên dưới, nhấn mạnh ưu đãi dành cho tài xế.",
+        "Gửi yêu cầu hỗ trợ đăng trên kênh cộng đồng tài xế Ahamove.",
+      ],
+      prompt: {
+        kind: "content",
+        text: [
+          "Mẫu bài đăng ngắn cho tài xế Ahamove:",
+          "'Tài xế Ahamove ghé cửa hàng nhận ưu đãi đặc biệt hôm nay!", 
+          "Nhanh – chuẩn – thân thiện. Hẹn gặp bạn trên lộ trình tiếp theo!'",
+          "Thêm CTA: 'Inbox để nhận mã ưu đãi' + 3 hashtag #AhaDriver #Ahamove #UuDaiTaiXe",
+        ].join(" \n"),
+      },
+      cta: { label: "Yêu cầu hỗ trợ quảng bá", url: "https://www.facebook.com/AhamoveVietNam/" },
+    },
+  ];
+}
+
+function parseCsv(input: string): string[] {
+  return input
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
 
 export default function Home() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+  const [user, setUser] = useState<UserInfo>({
+    completedOrders: 0,
+    serviceIdsInput: "",
+    subscriptionsInput: "",
+    totalSpentVnd: 0,
+    dateRange: "12 tháng qua",
+  });
+  const [count, setCount] = useState<number>(3);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<GenerateResponse | null>(null);
+
+  const totalSlides = useMemo(() => {
+    if (!data) return 0;
+    // image slides + user slide + hero slide
+    return data.images.length + 2;
+  }, [data]);
+
+  const [current, setCurrent] = useState(0);
+  const [selectedHero, setSelectedHero] = useState<number | null>(null);
+  const missions = useMemo(() => {
+    if (!data || selectedHero == null) return [] as Mission[];
+    const heroName = data.heroes[selectedHero] || "";
+    return buildMissions(heroName, user);
+  }, [data, selectedHero, user]);
+  const [autoPlay, setAutoPlay] = useState<boolean>(false);
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!autoPlay || totalSlides === 0) return;
+    if (timerRef.current) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => {
+      setCurrent((c) => (c + 1) % totalSlides);
+    }, 4000);
+    return () => {
+      if (timerRef.current) window.clearTimeout(timerRef.current);
+    };
+  }, [autoPlay, current, totalSlides]);
+
+  const goPrev = useCallback(() => {
+    if (totalSlides === 0) return;
+    setCurrent((c) => (c - 1 + totalSlides) % totalSlides);
+  }, [totalSlides]);
+
+  const goNext = useCallback(() => {
+    if (totalSlides === 0) return;
+    setCurrent((c) => (c + 1) % totalSlides);
+  }, [totalSlides]);
+
+  const handleGenerate = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      setSelectedHero(null);
+      setCurrent(0);
+
+      // Chuẩn hóa dữ liệu gửi server
+      const payload = {
+        count,
+        user: {
+          completedOrders: Number(user.completedOrders) || 0,
+          serviceIds: parseCsv(user.serviceIdsInput),
+          subscriptions: parseCsv(user.subscriptionsInput),
+          totalSpentVnd: Number(user.totalSpentVnd) || 0,
+          dateRange: user.dateRange || "12 tháng qua",
+        },
+      };
+
+      const resp = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!resp.ok) {
+        const t = await resp.text();
+        throw new Error(t || "Tạo nội dung thất bại");
+      }
+      const json = (await resp.json()) as GenerateResponse;
+      setData(json);
+      setSelectedHero(json.defaultHeroIndex ?? 0);
+    } catch (e: any) {
+      setError(e?.message || "Có lỗi xảy ra");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") goPrev();
+      if (e.key === "ArrowRight") goNext();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [goPrev, goNext]);
+
+  const renderImageSlide = (idx: number) => {
+    if (!data) return null;
+    const img = data.images[idx];
+    const story = data.stories[idx] ?? "";
+    return (
+      <div className="flex w-full flex-col items-center gap-4" aria-roledescription="trang hình ảnh">
+        {/* dùng img để tránh cấu hình next/image cho data URL */}
+        <div
+          className="mx-auto w-full max-w-[420px] overflow-hidden rounded-2xl border border-black/10 dark:border-white/10 bg-black/5"
+          style={{ aspectRatio: "9 / 16" }}
+        >
+          <img
+            src={img}
+            alt={`Trang ${idx + 1}`}
+            className="h-full w-full object-cover"
+          />
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+        <p className="text-base leading-relaxed text-zinc-700 dark:text-zinc-300 max-w-2xl text-center sm:text-left">
+          {story}
+        </p>
+      </div>
+    );
+  };
+
+  const renderUserSlide = () => {
+    if (!data) return null;
+    const u = data.userSlide;
+    const s = u.stats;
+    return (
+      <div className="w-full" aria-roledescription="trang tổng kết người dùng">
+        <h2 className="text-2xl font-semibold mb-4">{u.title}</h2>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <StatCard label="Đơn hoàn thành" value={s.completedOrders} />
+          <StatCard label="Tài xế tin cậy" value={s.reliableShippers} />
+          <StatCard label="Thời gian giao TB (phút)" value={s.avgDeliveryMins} />
+          <StatCard label="Nhanh nhất (phút)" value={s.fastestDeliveryMins} />
+        </div>
+        <p className="mt-4 text-zinc-700 dark:text-zinc-300">{u.summary}</p>
+      </div>
+    );
+  };
+
+  const renderHeroSlide = () => {
+    if (!data) return null;
+    const heroList = data.heroes;
+    const selected = selectedHero ?? data.defaultHeroIndex ?? 0;
+    const heroName = heroList[selected];
+    const payloadUser = {
+      completedOrders: Number(user.completedOrders) || 0,
+      serviceIds: parseCsv(user.serviceIdsInput),
+      subscriptions: parseCsv(user.subscriptionsInput),
+      totalSpentVnd: Number(user.totalSpentVnd) || 0,
+      dateRange: user.dateRange || "12 tháng qua",
+    };
+    return (
+      <div className="w-full" aria-roledescription="trang chọn anh hùng">
+        <h2 className="text-2xl font-semibold mb-1">Hãy chọn anh hùng mà bạn muốn trở thành</h2>
+        <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">Mặc định: {heroList[data.defaultHeroIndex]}</p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          {heroList.map((h, i) => {
+            const active = i === selected;
+            return (
+              <button
+                key={h}
+                onClick={() => setSelectedHero(i)}
+                className={
+                  "rounded-xl border p-3 text-sm transition-colors focus:outline-none " +
+                  (active
+                    ? "border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-300"
+                    : "border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5")
+                }
+                aria-pressed={active}
+                aria-label={`Chọn anh hùng ${h}`}
+              >
+                <div className="font-medium">{h}</div>
+                {active && <div className="mt-1 text-xs opacity-80">Đã chọn</div>}
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-4 text-zinc-700 dark:text-zinc-300">
+          Bạn đã chọn: <span className="font-semibold">{heroName}</span>
+        </div>
+
+        {/* Missions */}
+        <div className="mt-6">
+          <h3 className="text-xl font-semibold">Nhiệm vụ để hiện thực hóa “anh hùng” của bạn</h3>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Chọn một nhiệm vụ bên dưới để bắt đầu ngay.</p>
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {missions.map((m) => (
+              <MissionCard key={m.id} m={m} heroName={heroName} userPayload={payloadUser} slideshowImages={data.images} />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const content = () => {
+    if (loading) {
+      return (
+        <div className="flex w-full items-center justify-center py-16" aria-busy>
+          <Spinner />
+          <span className="ml-3 text-zinc-600 dark:text-zinc-300">Đang tạo hình ảnh và câu chuyện…</span>
+        </div>
+      );
+    }
+    if (error) {
+      return (
+        <div className="rounded-xl border border-red-300 bg-red-50 p-4 text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300">
+          {error}
+        </div>
+      );
+    }
+    if (!data) {
+      return (
+        <p className="text-zinc-600 dark:text-zinc-400">Nhập thông tin và nhấn "Tạo" để bắt đầu. Nếu không có khóa API, demo sẽ dùng ảnh minh họa.</p>
+      );
+    }
+
+    const imageSlides = data.images.length;
+    const isUserSlide = current === imageSlides;
+    const isHeroSlide = current === imageSlides + 1;
+
+    return (
+      <div className="w-full">
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <button onClick={goPrev} className="rounded-full border px-4 py-2 hover:bg-black/5 dark:hover:bg-white/5" aria-label="Trang trước">
+              ◀
+            </button>
+            <button onClick={goNext} className="rounded-full border px-4 py-2 hover:bg-black/5 dark:hover:bg-white/5" aria-label="Trang sau">
+              ▶
+            </button>
+            <label className="ml-3 inline-flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+              <input type="checkbox" checked={autoPlay} onChange={(e) => setAutoPlay(e.target.checked)} />
+              Tự động chạy
+            </label>
+          </div>
+          <div className="text-sm text-zinc-600 dark:text-zinc-400">
+            {current + 1} / {totalSlides}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-black/10 p-4 dark:border-white/10">
+          {isUserSlide ? renderUserSlide() : isHeroSlide ? renderHeroSlide() : renderImageSlide(current)}
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2" role="tablist" aria-label="Chỉ báo trang">
+          {Array.from({ length: totalSlides }).map((_, i) => (
+            <button
+              key={i}
+              role="tab"
+              aria-selected={current === i}
+              aria-label={`Chuyển tới trang ${i + 1}`}
+              className={
+                "h-2.5 w-2.5 rounded-full transition-colors " +
+                (current === i ? "bg-orange-500" : "bg-black/20 dark:bg-white/20 hover:bg-black/40 dark:hover:bg-white/40")
+              }
+              onClick={() => setCurrent(i)}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          ))}
         </div>
+
+        <div className="mt-6 flex items-center justify-between">
+          <button
+            className="rounded-full border px-4 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5"
+            onClick={() => setCurrent(0)}
+          >
+            Bắt đầu lại
+          </button>
+          <button
+            className="rounded-full border px-4 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5"
+            onClick={() => {
+              setData(null);
+              setSelectedHero(null);
+              setCurrent(0);
+            }}
+          >
+            Xóa
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex min-h-screen items-start justify-center bg-zinc-50 font-sans dark:bg-black">
+      <main className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-6 sm:p-10">
+        <header className="flex flex-col gap-2">
+          <h1 className="text-3xl font-semibold tracking-tight">Trang trình chiếu AI Ahamove</h1>
+          <p className="text-zinc-600 dark:text-zinc-400">Nhập thông tin sử dụng Ahamove trong năm qua. Hệ thống sẽ tạo ~3 hình và câu chuyện tiếng Việt (≤ 100 từ), kèm slide tổng kết và slide chọn anh hùng.</p>
+        </header>
+
+        <section className="rounded-2xl border border-black/10 p-4 dark:border-white/10">
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="text-sm">
+                <span className="mb-1 block font-medium">Tổng đơn hoàn thành</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={user.completedOrders}
+                  onChange={(e) => setUser((u) => ({ ...u, completedOrders: Number(e.target.value) }))}
+                  className="w-full rounded-xl border border-black/10 bg-white p-2 text-sm outline-none focus:border-orange-400 dark:border-white/10 dark:bg-zinc-900"
+                  placeholder="Ví dụ: 128"
+                />
+              </label>
+
+              <label className="text-sm">
+                <span className="mb-1 block font-medium">Tổng chi tiêu (VND)</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={user.totalSpentVnd}
+                  onChange={(e) => setUser((u) => ({ ...u, totalSpentVnd: Number(e.target.value) }))}
+                  className="w-full rounded-xl border border-black/10 bg-white p-2 text-sm outline-none focus:border-orange-400 dark:border-white/10 dark:bg-zinc-900"
+                  placeholder="Ví dụ: 12000000"
+                />
+              </label>
+
+              <label className="text-sm sm:col-span-2">
+                <span className="mb-1 block font-medium">Dịch vụ đã dùng (ID, phân tách dấu phẩy)</span>
+                <input
+                  type="text"
+                  value={user.serviceIdsInput}
+                  onChange={(e) => setUser((u) => ({ ...u, serviceIdsInput: e.target.value }))}
+                  className="w-full rounded-xl border border-black/10 bg-white p-2 text-sm outline-none focus:border-orange-400 dark:border-white/10 dark:bg-zinc-900"
+                  placeholder="Ví dụ: EXPRESS, INSTANT"
+                />
+              </label>
+
+              <label className="text-sm sm:col-span-2">
+                <span className="mb-1 block font-medium">Gói đăng ký trong năm (phân tách dấu phẩy)</span>
+                <input
+                  type="text"
+                  value={user.subscriptionsInput}
+                  onChange={(e) => setUser((u) => ({ ...u, subscriptionsInput: e.target.value }))}
+                  className="w-full rounded-xl border border-black/10 bg-white p-2 text-sm outline-none focus:border-orange-400 dark:border-white/10 dark:bg-zinc-900"
+                  placeholder="Ví dụ: Pro, Loyalty+"
+                />
+              </label>
+
+              <label className="text-sm">
+                <span className="mb-1 block font-medium">Khoảng thời gian</span>
+                <input
+                  type="text"
+                  value={user.dateRange}
+                  onChange={(e) => setUser((u) => ({ ...u, dateRange: e.target.value }))}
+                  className="w-full rounded-xl border border-black/10 bg-white p-2 text-sm outline-none focus:border-orange-400 dark:border-white/10 dark:bg-zinc-900"
+                  placeholder="Ví dụ: 11/2024–11/2025"
+                />
+              </label>
+
+              <label className="text-sm">
+                <span className="mb-1 block font-medium">Số lượng ảnh</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={6}
+                  value={count}
+                  onChange={(e) => setCount(Number(e.target.value))}
+                  className="w-28 rounded-xl border border-black/10 bg-white p-2 text-sm outline-none focus:border-orange-400 dark:border-white/10 dark:bg-zinc-900"
+                />
+              </label>
+            </div>
+
+            <div className="flex items-center justify-end">
+              <button
+                onClick={handleGenerate}
+                disabled={loading}
+                className="rounded-full bg-orange-500 px-5 py-2 text-white shadow hover:bg-orange-600 disabled:opacity-60"
+              >
+                {loading ? "Đang tạo…" : "Tạo"}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {content()}
+
+        <footer className="mt-8 text-center text-xs text-zinc-500 dark:text-zinc-400">
+          Mẹo: Thiết lập biến môi trường GOOGLE_API_KEY (và tùy chọn: GEMINI_IMAGE_MODEL, GEMINI_TEXT_MODEL) ở server để tạo hình và câu chuyện thật. Nếu thiếu, hệ thống sẽ dùng ảnh minh họa.
+        </footer>
       </main>
+    </div>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl border border-black/10 p-4 text-center dark:border-white/10">
+      <div className="text-2xl font-semibold">{value}</div>
+      <div className="text-xs text-zinc-600 dark:text-zinc-400">{label}</div>
+    </div>
+  );
+}
+
+function Spinner() {
+  return (
+    <svg className="h-5 w-5 animate-spin text-orange-500" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+    </svg>
+  );
+}
+
+
+// Mission card component
+type UserPayload = { completedOrders: number; serviceIds: string[]; subscriptions: string[]; totalSpentVnd: number; dateRange: string };
+
+function MissionCard({ m, heroName, userPayload, slideshowImages }: { m: Mission; heroName: string; userPayload: UserPayload; slideshowImages: string[] }) {
+  const [copied, setCopied] = useState(false);
+  // Image mission state
+  const [imgLoading, setImgLoading] = useState(false);
+  const [imgError, setImgError] = useState<string | null>(null);
+  const [generatedImages, setGeneratedImages] = useState<string[]>([]);
+
+  // Caption mission state
+  const [source, setSource] = useState<"slideshow" | "upload">("slideshow");
+  const [chosenSlide, setChosenSlide] = useState<string>(slideshowImages?.[0] || "");
+  const [uploaded, setUploaded] = useState<string | null>(null);
+  const [extraNotes, setExtraNotes] = useState<string>("");
+  const [captionLoading, setCaptionLoading] = useState(false);
+  const [captionError, setCaptionError] = useState<string | null>(null);
+  const [captionText, setCaptionText] = useState<string>("");
+  const [imgCount, setImgCount] = useState<number>(1);
+
+  const handleCopy = async () => {
+    if (!m.prompt?.text) return;
+    try {
+      await navigator.clipboard.writeText(m.prompt.text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (e) {
+      // Fallback: create a temporary textarea
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = m.prompt.text;
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      } catch (e2) {
+        console.warn("Copy failed", e2);
+      }
+    }
+  };
+
+  const handleGenerateImages = async () => {
+    if (m.id !== "ai-image") return;
+    try {
+      setImgLoading(true);
+      setImgError(null);
+      const resp = await fetch("/api/hero/image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          heroName,
+          user: userPayload,
+          promptOverride: m.prompt?.text,
+          count: imgCount,
+          aspectRatio: "1:1",
+        }),
+      });
+      const json = await resp.json().catch(() => ({} as any));
+      if (!resp.ok || json?.ok === false) {
+        throw new Error(json?.error || "Tạo hình thất bại");
+      }
+      const imgs: string[] = json?.data?.images || [];
+      setGeneratedImages(imgs);
+    } catch (e: any) {
+      setImgError(e?.message || "Có lỗi xảy ra");
+    } finally {
+      setImgLoading(false);
+    }
+  };
+
+  const handleGenerateCaption = async () => {
+    if (m.id !== "ai-content") return;
+    try {
+      setCaptionLoading(true);
+      setCaptionError(null);
+      const imageUrl = source === "upload" ? uploaded || undefined : chosenSlide || undefined;
+      const resp = await fetch("/api/hero/caption", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          heroName,
+          user: userPayload,
+          chosenImageUrl: imageUrl,
+          extraNotes,
+        }),
+      });
+      const json = await resp.json().catch(() => ({} as any));
+      if (!resp.ok || json?.ok === false) {
+        throw new Error(json?.error || "Tạo caption thất bại");
+      }
+      setCaptionText(json?.data?.caption || "");
+    } catch (e: any) {
+      setCaptionError(e?.message || "Có lỗi xảy ra");
+    } finally {
+      setCaptionLoading(false);
+    }
+  };
+
+  const isHttp = !!m.cta?.url && /^https?:\/\//i.test(m.cta.url);
+
+  return (
+    <div className="flex h-full flex-col justify-between rounded-2xl border border-black/10 p-4 dark:border-white/10">
+      <div>
+        <h4 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{m.title}</h4>
+        <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">{m.summary}</p>
+
+        {m.steps?.length > 0 && (
+          <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-zinc-800 dark:text-zinc-200">
+            {m.steps.map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
+          </ol>
+        )}
+
+        {m.prompt?.text && (
+          <div className="mt-3">
+            <div className="mb-1 flex items-center justify-between">
+              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Gợi ý {m.prompt.kind === "image" ? "(Hình ảnh)" : "(Nội dung)"}
+              </div>
+              <button
+                onClick={handleCopy}
+                className="rounded-full border px-3 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/5"
+              >
+                {copied ? "Đã sao chép" : "Sao chép"}
+              </button>
+            </div>
+            <textarea
+              readOnly
+              value={m.prompt.text}
+              className="h-28 w-full resize-none rounded-xl border border-black/10 bg-white p-2 text-sm dark:border-white/10 dark:bg-zinc-900"
+            />
+          </div>
+        )}
+      </div>
+
+      {m.id === "ai-image" ? (
+        <div className="mt-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="text-sm text-zinc-700 dark:text-zinc-300 inline-flex items-center gap-2" aria-label="Số lượng ảnh">
+              <span>Số lượng</span>
+              <select
+                className="rounded-md border border-black/10 bg-white px-2 py-1 text-sm dark:border-white/10 dark:bg-zinc-900"
+                value={imgCount}
+                onChange={(e) => setImgCount(Math.max(1, Math.min(2, Number(e.target.value) || 1)))}
+              >
+                <option value={1}>1</option>
+                <option value={2}>2</option>
+              </select>
+            </label>
+            <button
+              onClick={handleGenerateImages}
+              disabled={imgLoading}
+              className="rounded-full bg-orange-500 px-4 py-2 text-sm text-white hover:bg-orange-600 disabled:opacity-60"
+              aria-busy={imgLoading}
+            >
+              {imgLoading ? "Đang tạo…" : m.cta?.label || "Thử tạo ngay"}
+            </button>
+            {imgError && <span className="text-sm text-red-600 dark:text-red-400">{imgError}</span>}
+          </div>
+
+          {generatedImages.length > 0 && (
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              {generatedImages.map((url, i) => (
+                <div key={i} className="rounded-xl border border-black/10 p-2 dark:border-white/10">
+                  <img src={url} alt={`Ảnh ${i + 1}`} className="h-40 w-full rounded-lg object-cover" />
+                  <div className="mt-2 flex items-center justify-end gap-2">
+                    <button
+                      onClick={async () => {
+                        try { await navigator.clipboard.writeText(url); } catch {}
+                      }}
+                      className="rounded-full border px-3 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/5"
+                    >
+                      Sao chép liên kết
+                    </button>
+                    <a
+                      href={url}
+                      download={`Ahamove-Hero-${i + 1}.png`}
+                      className="rounded-full border px-3 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/5"
+                    >
+                      Tải xuống
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : m.id === "ai-content" ? (
+        <div className="mt-4">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="inline-flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                <input
+                  type="radio"
+                  name={`imgsrc-${heroName}`}
+                  value="slideshow"
+                  checked={source === "slideshow"}
+                  onChange={() => setSource("slideshow")}
+                />
+                Chọn từ slideshow
+              </label>
+              <label className="inline-flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                <input
+                  type="radio"
+                  name={`imgsrc-${heroName}`}
+                  value="upload"
+                  checked={source === "upload"}
+                  onChange={() => setSource("upload")}
+                />
+                Tải ảnh
+              </label>
+
+              {source === "slideshow" ? (
+                <select
+                  className="rounded-md border border-black/10 bg-white px-2 py-1 text-sm dark:border-white/10 dark:bg-zinc-900"
+                  value={chosenSlide}
+                  onChange={(e) => setChosenSlide(e.target.value)}
+                >
+                  {slideshowImages && slideshowImages.length > 0 ? (
+                    slideshowImages.map((u, idx) => (
+                      <option key={idx} value={u}>{`Ảnh slideshow ${idx + 1}`}</option>
+                    ))
+                  ) : (
+                    <option value="">(Chưa có ảnh slideshow)</option>
+                  )}
+                </select>
+              ) : (
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    const reader = new FileReader();
+                    reader.onload = () => setUploaded(String(reader.result || ""));
+                    reader.readAsDataURL(f);
+                  }}
+                />
+              )}
+            </div>
+
+            <label className="text-sm">
+              <span className="mb-1 block font-medium">Ghi chú thêm (tùy chọn)</span>
+              <input
+                type="text"
+                value={extraNotes}
+                onChange={(e) => setExtraNotes(e.target.value)}
+                className="w-full rounded-xl border border-black/10 bg-white p-2 text-sm outline-none focus:border-orange-400 dark:border-white/10 dark:bg-zinc-900"
+                placeholder="Ví dụ: Ưu tiên tông lạc quan, nhắc ưu đãi 11/11"
+              />
+            </label>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleGenerateCaption}
+                disabled={captionLoading}
+                className="rounded-full bg-orange-500 px-4 py-2 text-sm text-white hover:bg-orange-600 disabled:opacity-60"
+                aria-busy={captionLoading}
+              >
+                {captionLoading ? "Đang tạo…" : m.cta?.label || "Tạo caption"}
+              </button>
+              {captionError && <span className="text-sm text-red-600 dark:text-red-400">{captionError}</span>}
+            </div>
+
+            {captionText && (
+              <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <div className="mb-1 flex items-center justify-between">
+                    <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Kết quả caption</div>
+                    <button
+                      onClick={async () => {
+                        try { await navigator.clipboard.writeText(captionText); } catch {}
+                      }}
+                      className="rounded-full border px-3 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/5"
+                    >
+                      Sao chép caption
+                    </button>
+                  </div>
+                  <textarea
+                    readOnly
+                    value={captionText}
+                    className="h-36 w-full resize-none rounded-xl border border-black/10 bg-white p-2 text-sm dark:border-white/10 dark:bg-zinc-900"
+                  />
+                </div>
+
+                {/* Facebook-style preview */}
+                <div className="rounded-xl border border-black/10 p-3 dark:border-white/10">
+                  <div className="mb-2 flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-full bg-orange-500"></div>
+                    <div className="text-sm">
+                      <div className="font-semibold">Ahamove</div>
+                      <div className="text-xs text-zinc-500">Vừa xong · Công khai</div>
+                    </div>
+                  </div>
+                  <div className="whitespace-pre-wrap text-sm text-zinc-800 dark:text-zinc-200">{captionText}</div>
+                  {((source === "upload" && uploaded) || (source === "slideshow" && chosenSlide)) && (
+                    <div className="mt-2 overflow-hidden rounded-lg border border-black/10 dark:border-white/10">
+                      <img
+                        src={source === "upload" ? uploaded! : chosenSlide}
+                        alt="Xem trước"
+                        className="max-h-64 w-full object-cover"
+                      />
+                    </div>
+                  )}
+                  <div className="mt-2 grid grid-cols-3 text-center text-xs text-zinc-600 dark:text-zinc-400">
+                    <div>Like</div>
+                    <div>Comment</div>
+                    <div>Share</div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : m.cta ? (
+        <div className="mt-4 flex items-center justify-end">
+          {isHttp ? (
+            <a
+              href={m.cta.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-full bg-orange-500 px-4 py-2 text-sm text-white hover:bg-orange-600"
+            >
+              {m.cta.label}
+            </a>
+          ) : (
+            <button
+              onClick={() => (window.location.href = m.cta!.url)}
+              className="rounded-full bg-orange-500 px-4 py-2 text-sm text-white hover:bg-orange-600"
+            >
+              {m.cta.label}
+            </button>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
