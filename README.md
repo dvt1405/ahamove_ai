@@ -10,6 +10,7 @@
   - Slide tổng kết người dùng (nhãn tiếng Việt)
   - Slide chọn anh hùng (10 anh hùng, mặc định “Người bán hàng xuất sắc nhất thế giới”)
 - Fallback: khi thiếu khóa hoặc lỗi API, hiển thị ảnh SVG minh họa + truyện mẫu tiếng Việt.
+- Tỷ lệ hình ảnh mặc định 9:16 cho slideshow và mọi bản xem trước (preview) để phù hợp màn hình điện thoại.
 
 ## Cấu hình môi trường (.env)
 Tạo file `.env.local` ở thư mục gốc với nội dung:
@@ -85,7 +86,7 @@ Two endpoints power the mission cards for generating hero images and captions. T
   },
   "promptOverride": "(optional) custom prompt...",
   "count": 1,
-  "aspectRatio": "1:1"
+  "aspectRatio": "9:16"
 }
 ```
 - Response JSON (200):

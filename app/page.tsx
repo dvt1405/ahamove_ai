@@ -601,7 +601,7 @@ function MissionCard({ m, heroName, userPayload, slideshowImages }: { m: Mission
           user: userPayload,
           promptOverride: m.prompt?.text,
           count: imgCount,
-          aspectRatio: "1:1",
+          aspectRatio: "9:16",
         }),
       });
       const json = await resp.json().catch(() => ({} as any));
@@ -712,7 +712,9 @@ function MissionCard({ m, heroName, userPayload, slideshowImages }: { m: Mission
             <div className="mt-3 grid grid-cols-2 gap-3">
               {generatedImages.map((url, i) => (
                 <div key={i} className="rounded-xl border border-black/10 p-2 dark:border-white/10">
-                  <img src={url} alt={`Ảnh ${i + 1}`} className="h-40 w-full rounded-lg object-cover" />
+                  <div className="w-full overflow-hidden rounded-lg bg-black/5" style={{ aspectRatio: "9 / 16" }}>
+                    <img src={url} alt={`Ảnh ${i + 1}`} className="h-full w-full object-cover" />
+                  </div>
                   <div className="mt-2 flex items-center justify-end gap-2">
                     <button
                       onClick={async () => {
@@ -845,11 +847,13 @@ function MissionCard({ m, heroName, userPayload, slideshowImages }: { m: Mission
                   <div className="whitespace-pre-wrap text-sm text-zinc-800 dark:text-zinc-200">{captionText}</div>
                   {((source === "upload" && uploaded) || (source === "slideshow" && chosenSlide)) && (
                     <div className="mt-2 overflow-hidden rounded-lg border border-black/10 dark:border-white/10">
-                      <img
-                        src={source === "upload" ? uploaded! : chosenSlide}
-                        alt="Xem trước"
-                        className="max-h-64 w-full object-cover"
-                      />
+                      <div className="w-full bg-black/5" style={{ aspectRatio: "9 / 16" }}>
+                        <img
+                          src={source === "upload" ? uploaded! : chosenSlide}
+                          alt="Xem trước"
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
                     </div>
                   )}
                   <div className="mt-2 grid grid-cols-3 text-center text-xs text-zinc-600 dark:text-zinc-400">
