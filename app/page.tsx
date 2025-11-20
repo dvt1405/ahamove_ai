@@ -2,6 +2,15 @@
 
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 
+// Allow custom web component in TSX
+declare global {
+    namespace JSX {
+        interface IntrinsicElements {
+            'dotlottie-player': any;
+        }
+    }
+}
+
 // Hero preview images mapping (paths under /public). For robustness we provide multiple filename candidates
 // (original diacritics, variants with accidental spaces, and slug versions). The UI will try them in order and
 // fall back to /globe.svg if none exists.
@@ -218,6 +227,25 @@ function parseCsv(input: string): string[] {
         .filter(Boolean);
 }
 
+function computeDefaultHeroIndex(u: UserInfo, heroes: string[]): number {
+    const n = heroes?.length || 0;
+    if (n === 0) return 0;
+    const parts = [
+        String(u.completedOrders || 0),
+        String(u.totalSpentVnd || 0),
+        String(u.dateRange || ""),
+        String(u.serviceIdsInput || ""),
+        String(u.subscriptionsInput || "")
+    ].join("|");
+    let hash = 0;
+    for (let i = 0; i < parts.length; i++) {
+        hash = (hash * 33) ^ parts.charCodeAt(i);
+        hash |= 0;
+    }
+    const idx = Math.abs(hash) % n;
+    return idx;
+}
+
 export default function Home() {
     const [user, setUser] = useState<UserInfo>({
         completedOrders: 0,
@@ -249,18 +277,85 @@ export default function Home() {
     const [showSlideshow, setShowSlideshow] = useState<boolean>(false);
     const [prevCurrent, setPrevCurrent] = useState<number>(0);
     const [slideDir, setSlideDir] = useState<"left" | "right">("right");
+    // Lottie effect state
+    const LOTTIE_FILES = useMemo(() => [
+        "/Fireworks Teal and Red.lottie",
+        "/Fireworks.lottie",
+        "/Confetti.lottie",
+        "/Animation - celebrate.lottie",
+        "/celebrate.lottie",
+    ], []);
+    const [effectSrc, setEffectSrc] = useState<string | null>(null);
+    const [effectVisible, setEffectVisible] = useState<boolean>(false);
+    const [effectKey, setEffectKey] = useState<number>(0);
+    const [reducedMotion, setReducedMotion] = useState<boolean>(false);
+    const effectTimerRef = useRef<number | null>(null);
 
     useEffect(() => {
         if (!autoPlay || totalSlides === 0) return;
+        // In fullscreen popup, pause on the last slide to allow hero selection
+        if (showSlideshow && current === totalSlides - 1) {
+            setAutoPlay(false);
+            return;
+        }
         if (timerRef.current) window.clearTimeout(timerRef.current);
         timerRef.current = window.setTimeout(() => {
             setSlideDir("right");
             setCurrent((c) => (c + 1) % totalSlides);
-        }, 4000);
+        }, 15000);
         return () => {
             if (timerRef.current) window.clearTimeout(timerRef.current);
         };
-    }, [autoPlay, current, totalSlides]);
+    }, [autoPlay, current, totalSlides, showSlideshow]);
+
+    // Detect reduced motion preference
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+        const handler = () => setReducedMotion(!!mq.matches);
+        setReducedMotion(!!mq.matches);
+        if (mq.addEventListener) mq.addEventListener('change', handler);
+        else if ((mq as any).addListener) (mq as any).addListener(handler);
+        return () => {
+            if (mq.removeEventListener) mq.removeEventListener('change', handler);
+            else if ((mq as any).removeListener) (mq as any).removeListener(handler);
+        };
+    }, []);
+
+    // Trigger Lottie effect on slide change
+    useEffect(() => {
+        if (!showSlideshow || reducedMotion) return;
+        if (!LOTTIE_FILES || LOTTIE_FILES.length === 0) return;
+        if (effectTimerRef.current) {
+            window.clearTimeout(effectTimerRef.current);
+            effectTimerRef.current = null;
+        }
+        const src = LOTTIE_FILES[Math.floor(Math.random() * LOTTIE_FILES.length)];
+        setEffectSrc(src);
+        setEffectVisible(true);
+        setEffectKey((k) => k + 1);
+        const duration = 3000 + Math.floor(Math.random() * 7000); // 3–10s
+        effectTimerRef.current = window.setTimeout(() => {
+            setEffectVisible(false);
+        }, duration);
+        return () => {
+            if (effectTimerRef.current) {
+                window.clearTimeout(effectTimerRef.current);
+                effectTimerRef.current = null;
+            }
+        };
+    }, [current, showSlideshow, reducedMotion, LOTTIE_FILES]);
+
+    // Hide effect when closing slideshow
+    useEffect(() => {
+        if (!showSlideshow) {
+            setEffectVisible(false);
+            if (effectTimerRef.current) {
+                window.clearTimeout(effectTimerRef.current);
+                effectTimerRef.current = null;
+            }
+        }
+    }, [showSlideshow]);
 
 
     const goPrev = useCallback(() => {
@@ -311,7 +406,8 @@ export default function Home() {
             }
             const json = (await resp.json()) as GenerateResponse;
             setData(json);
-            setSelectedHero(json.defaultHeroIndex ?? 0);
+            const computedDefault = computeDefaultHeroIndex(user, json.heroes || []);
+            setSelectedHero(computedDefault);
             setShowSlideshow(true);
             setAutoPlay(true);
         } catch (e: any) {
@@ -404,8 +500,7 @@ export default function Home() {
         return (
             <div className="w-full" aria-roledescription="trang chọn anh hùng">
                 <h2 className="text-2xl font-semibold mb-1">Hãy chọn anh hùng mà bạn muốn trở thành</h2>
-                <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">Mặc
-                    định: {heroList[data.defaultHeroIndex]}</p>
+                <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">Mặc định: {heroList[computeDefaultHeroIndex(user, heroList)]}</p>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                     {heroList.map((h, i) => {
                         const active = i === selected;
@@ -479,11 +574,15 @@ export default function Home() {
             return (
                 <div className="absolute inset-0">
                     <img src={img} alt={`Trang ${current + 1}`} className="absolute inset-0 h-full w-full object-cover"/>
+                    {/* Lottie celebration overlay */}
+                    {effectSrc && (
+                        <LottieOverlay src={effectSrc} visible={effectVisible} playKey={effectKey} loop={true} />
+                    )}
                     {/* Caption overlay with typing */}
                     {story && (
-                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent p-4 sm:p-6">
+                        <div className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/70 via-black/30 to-transparent p-4 sm:p-6">
                             <Typewriter text={story} speed={22} startDelay={350}
-                                        className="block whitespace-pre-wrap text-base leading-relaxed text-white/95"/>
+                                        className="relative z-30 block whitespace-pre-wrap text-base leading-relaxed text-white/95"/>
                         </div>
                     )}
                 </div>
@@ -495,37 +594,77 @@ export default function Home() {
             const s = u.stats;
             return (
                 <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-white">
+                    {/* Lottie celebration overlay */}
+                    {effectSrc && (
+                        <LottieOverlay src={effectSrc} visible={effectVisible} playKey={effectKey} loop={true} />
+                    )}
                     <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom,rgba(255,255,255,0.08),transparent_60%)]"/>
                     <Typewriter text={u.title} startDelay={200} speed={24}
-                                className="mb-4 text-center text-2xl font-semibold sm:text-3xl"/>
-                    <div className="mb-4 grid w-full max-w-md grid-cols-2 gap-2 text-center text-sm">
+                                className="relative z-20 mb-4 text-center text-2xl font-semibold sm:text-3xl"/>
+                    <div className="relative z-20 mb-4 grid w-full max-w-md grid-cols-2 gap-2 text-center text-sm">
                         <div className="rounded-lg bg-white/10 px-3 py-2 backdrop-blur">Đơn: <b>{s.completedOrders}</b></div>
                         <div className="rounded-lg bg-white/10 px-3 py-2 backdrop-blur">Tài xế tin cậy: <b>{s.reliableShippers}</b></div>
                         <div className="rounded-lg bg-white/10 px-3 py-2 backdrop-blur">TB (phút): <b>{s.avgDeliveryMins}</b></div>
                         <div className="rounded-lg bg-white/10 px-3 py-2 backdrop-blur">Nhanh nhất: <b>{s.fastestDeliveryMins}</b></div>
                     </div>
                     <Typewriter text={u.summary} startDelay={900} speed={18}
-                                className="mx-auto max-w-md text-center text-base leading-relaxed text-white/90"/>
+                                className="relative z-20 mx-auto max-w-md text-center text-base leading-relaxed text-white/90"/>
                 </div>
             );
         }
 
-        // Hero slide
+        // Hero slide (fullscreen with selectable hero list)
         const heroList = data.heroes;
         const selected = selectedHero ?? data.defaultHeroIndex ?? 0;
+        const defIdx = computeDefaultHeroIndex(user, heroList);
         const heroName = heroList[selected];
         return (
             <div className="absolute inset-0">
                 <img src={getHeroPreview(heroName)} alt={heroName}
                      className="absolute inset-0 h-full w-full object-cover"/>
-                <div className="absolute inset-0 bg-black/35"/>
-                <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center text-white">
-                    <Typewriter text={"Anh hùng của bạn"} startDelay={150} speed={28}
-                                className="text-sm uppercase tracking-wide text-white/80"/>
-                    <Typewriter text={heroName} startDelay={450} speed={30}
-                                className="mt-2 text-3xl font-semibold sm:text-4xl"/>
-                    <Typewriter text={"Hãy chọn và bắt đầu hành trình mới cùng Ahamove"} startDelay={900} speed={22}
-                                className="mt-4 max-w-md text-base leading-relaxed text-white/90"/>
+                {/* Lottie celebration overlay */}
+                {effectSrc && (
+                    <LottieOverlay src={effectSrc} visible={effectVisible} playKey={effectKey} loop={true} />
+                )}
+                {/* Dim layer for readability */}
+                <div className="absolute inset-0 z-20 bg-black/35"/>
+                {/* Content */}
+                <div className="absolute inset-0 z-30 flex flex-col p-4 sm:p-6 text-white overflow-y-auto">
+                    <div className="mb-3 text-center">
+                        <Typewriter text={"Chọn anh hùng của bạn"} startDelay={150} speed={26}
+                                    className="text-sm uppercase tracking-wide text-white/80"/>
+                        <Typewriter text={heroName} startDelay={420} speed={28}
+                                    className="mt-1 text-2xl font-semibold sm:text-3xl"/>
+                        <div className="mt-1 text-xs opacity-90">Mặc định: {heroList[defIdx]}</div>
+                    </div>
+                    <div className="mx-auto w-full max-w-[520px]">
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                            {heroList.map((h, i) => {
+                                const active = i === selected;
+                                return (
+                                    <button
+                                        key={h}
+                                        onClick={() => setSelectedHero(i)}
+                                        className={
+                                            "rounded-xl border p-2 text-left text-xs transition-colors focus:outline-none " +
+                                            (active
+                                                ? "border-orange-500 bg-orange-500/10 text-orange-100"
+                                                : "border-white/20 hover:bg-white/10")
+                                        }
+                                        aria-pressed={active}
+                                        aria-label={`Chọn anh hùng ${h}`}
+                                    >
+                                        <div className="aspect-square w-full overflow-hidden rounded-lg">
+                                            <SmartImage candidates={getHeroCandidates(h)} alt={h}
+                                                        className="h-full w-full object-cover"/>
+                                        </div>
+                                        <div className="mt-2 font-medium leading-snug">{h}</div>
+                                        {active && <div className="mt-1 text-[10px] opacity-80">Đã chọn</div>}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
                 </div>
             </div>
         );
@@ -748,17 +887,18 @@ export default function Home() {
                             style={{height: "100vh", aspectRatio: "9 / 16"}}
                             onClick={(e) => e.stopPropagation()}
                         >
-                            {/* Animated slide container */}
-                            <div key={current} className={`absolute inset-0 ${slideDir === 'right' ? 'animate-slide-in-right' : 'animate-slide-in-left'}`}>
+                            {/* Animated slide container (above Lottie) */}
+                            <div key={current} className={`absolute inset-0 z-20 ${slideDir === 'right' ? 'animate-slide-in-right' : 'animate-slide-in-left'}`}>
                                 {/* Slide content */}
                                 {renderFullscreenSlide()}
                             </div>
 
+
                             {/* Top gradient for readability */}
-                            <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/70 via-black/30 to-transparent" />
+                            <div className="pointer-events-none absolute inset-x-0 top-0 z-30 h-24 bg-gradient-to-b from-black/70 via-black/30 to-transparent" />
 
                             {/* Controls overlay */}
-                            <div className="pointer-events-auto absolute inset-x-0 top-0 flex items-center justify-between p-3 text-white">
+                            <div className="pointer-events-auto absolute inset-x-0 top-0 z-40 flex items-center justify-between p-3 text-white">
                                 <button
                                     className="rounded-full bg-white/10 px-3 py-1 text-sm backdrop-blur hover:bg-white/20"
                                     onClick={() => setShowSlideshow(false)}
@@ -870,6 +1010,26 @@ function Typewriter({
     );
 }
 
+// Lottie overlay for celebratory effects
+function LottieOverlay({ src, visible, playKey, loop = true, className }: { src: string; visible: boolean; playKey: number; loop?: boolean; className?: string; }) {
+    if (!visible || typeof window === 'undefined') return null;
+    const canUse = typeof window !== 'undefined' && (window as any).customElements && (window as any).customElements.get && (window as any).customElements.get('dotlottie-player');
+    if (!canUse) return null;
+    const safeSrc = (() => { try { return encodeURI(src); } catch { return src; } })();
+    return (
+        <div className={"pointer-events-none absolute inset-0 z-10 " + (className || "")}
+             aria-hidden="true"
+        >
+            <dotlottie-player
+                key={playKey}
+                src={safeSrc}
+                autoplay
+                loop={loop}
+                style={{ width: '100%', height: '100%', background: 'transparent' }}
+            />
+        </div>
+    );
+}
 
 
 // Mission card component
