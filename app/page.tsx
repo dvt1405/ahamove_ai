@@ -22,7 +22,7 @@ const HERO_PREVIEWS: Record<string, string[]> = {
         "/ahamove-hero-2.png",
     ],
     "Chuyên gia trải nghiệm khách hàng": [
-        "/chuyen_gia_trai_nghiem_khach_hang.png",
+        "/ahamove-hero-11.png",
     ],
     "Người dẫn đầu tốc độ": [
         "/ahamove-hero-4.png",
@@ -563,11 +563,11 @@ export default function Home() {
                     )}
                 </div>
                 <div className="mt-3" aria-roledescription="xem trước anh hùng">
-                    <div className="overflow-hidden rounded-xl border border-black/10 dark:border-white/10">
+                    <div className="overflow-hidden rounded-xl border border-black/10 dark:border-white/10 aspect-[9/16]">
                         <img
                             src={getHeroPreview(heroName)}
                             alt={`Xem trước ${heroName}`}
-                            className="max-h-80 w-full object-cover"
+                            className="h-full w-full object-cover"
                             onError={(e) => {
                                 const t = e.currentTarget as HTMLImageElement;
                                 if (t.src !== location.origin + "/globe.svg") t.src = "/globe.svg";
@@ -727,21 +727,21 @@ export default function Home() {
             };
             return (
                 <div className="absolute inset-0">
-                    {/* Dark base background */}
-                    <div className="absolute inset-0 bg-zinc-950"/>
+                    {/* Base background (light/dark) */}
+                    <div className="absolute inset-0 bg-white dark:bg-zinc-950"/>
                     {/* Background image at 40% opacity */}
                     <img src={getHeroPreview(heroName)} alt={heroName}
                          className="absolute inset-0 h-full w-full object-cover opacity-40"/>
                     {effectSrc && (
                         <LottieOverlay src={effectSrc} visible={effectVisible} playKey={effectKey} loop={true} />
                     )}
-                    {/* Strong dark overlay for readability */}
-                    <div className="absolute inset-0 z-20 bg-black/70"/>
-                    <div className="absolute inset-0 z-30 flex flex-col p-4 sm:p-6 text-white overflow-y-auto" aria-roledescription="trang nhiệm vụ">
+                    {/* Overlay for readability (light/dark) */}
+                    <div className="absolute inset-0 z-20 bg-white/70 dark:bg-black/70"/>
+                    <div className="absolute inset-0 z-30 flex flex-col p-4 sm:p-6 text-zinc-900 dark:text-white overflow-y-auto" aria-roledescription="trang nhiệm vụ">
                         <div className="mb-3 flex items-center justify-between">
                             <button
                                 onClick={() => { setSelectedHero(null); setCurrent(heroSlideIndex); }}
-                                className="rounded-full bg-white/10 px-3 py-1 text-sm backdrop-blur hover:bg-white/20"
+                                className="rounded-full bg-black/10 dark:bg-white/10 px-3 py-1 text-sm backdrop-blur hover:bg-black/20 dark:hover:bg-white/20"
                                 aria-label="Quay lại chọn anh hùng"
                             >
                                 ← Quay lại
@@ -751,7 +751,7 @@ export default function Home() {
                         <div className="mb-2 text-center">
                             <Typewriter text={"Nhiệm vụ để hiện thực hóa “anh hùng” của bạn"} startDelay={180} speed={22}
                                         className="text-lg font-semibold sm:text-xl"/>
-                            <div className="mt-1 text-xs text-white/80">Chọn một nhiệm vụ bên dưới để bắt đầu ngay.</div>
+                            <div className="mt-1 text-xs text-zinc-600 dark:text-white/80">Chọn một nhiệm vụ bên dưới để bắt đầu ngay.</div>
                         </div>
                         <div className="mx-auto w-full max-w-[720px]">
                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
