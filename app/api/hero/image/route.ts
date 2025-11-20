@@ -56,11 +56,37 @@ export async function POST(req: NextRequest) {
     const userSummary = summarizeUser(user);
 
     const basePrompt = [
-      `Minh họa phong cách hero cho Ahamove: "${heroName}".`,
-      "Bối cảnh thành phố năng động, đường đi giao hàng, tài xế tin cậy.",
-      "Thêm UI-floating tinh tế: thẻ lịch sử đơn, số liệu, xu/coin.",
-      "Màu thương hiệu Ahamove: cam, trắng, xanh đậm; tông hiện đại, ấm áp, thân thiện.",
-      `Thông tin người dùng: ${userSummary}.`,
+      `Hero-style illustration for Ahamove: ${heroName}.
+Dynamic city environment with delivery routes, reliable Ahamove rider, and smooth motion.
+Add subtle UI-floating elements: order history cards, stats, progress indicators, coins/xu.
+Use Ahamove brand colors: orange, white, deep blue; modern, warm, friendly tone.
+Include user information: ${userSummary}, displayed through soft UI overlays.
+High detail, clean, professional composition, suitable for application hero slides.`,
+      `Story-style hero illustration for Ahamove: ${heroName}.
+Visual storytelling through city scenes, delivery journey moments, friendly Ahamove rider.
+Include smooth UI-floating elements: past order cards, progress charts, rewards coins, timeline markers.
+Brand colors: orange, white, deep blue with a modern, warm, trustworthy mood.
+Embed user information: ${userSummary} inside translucent cards or UI panels.
+High detail, soft lighting, dynamic visuals; perfect for narrative or Year-in-Review slides.`,
+      `Future-tech hero illustration for Ahamove: ${heroName}.
+Futuristic city with glowing delivery paths, smart logistics atmosphere.
+UI-floating elements: order history panels, growth charts, coins, live stats, mini-maps.
+Highlight AI features: smart suggestions, predictive ETA, AI analytics panels.
+Ahamove brand colors: orange, white, deep blue, with soft neon accents.
+Show user information: ${userSummary} as part of data visualization overlays.
+High-detail, clean, modern style suitable for product vision or AI presentation slides.`,
+      `Warm, emotional hero illustration for Ahamove: ${heroName}.
+Soft city background, friendly Ahamove rider, happy customer interaction.
+Light UI-floating elements: completed orders, reward coins, journey timeline.
+Brand colors: orange, bright white, deep blue; warm and positive lighting.
+Feature user information: ${userSummary} integrated into subtle UI elements.
+High-detail, uplifting tone; best for appreciation, recap, or Year-in-Review slides.`,
+      `Minimal, clean-tech hero illustration for Ahamove: ${heroName}.
+Simple geometric city shapes, smooth delivery routes, clean modern layout.
+Inline UI-floating elements: order history cards, coins, small data stats, semi-transparent panels.
+Brand colors: orange, white, deep blue with spacious composition.
+Insert user information: ${userSummary} displayed in lightweight UI labels.
+Crisp, organized visual style, ideal for professional minimalistic slides.`,
       "Chi tiết cao, sạch, chuyên nghiệp, phù hợp làm slide ứng dụng.",
     ].join(" ");
 

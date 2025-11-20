@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Trang trình chiếu AI Ahamove",
+  title: "Ahamove Lookback and Speedup",
   description: "Tạo slide hình ảnh và câu chuyện tiếng Việt dựa trên dữ liệu sử dụng Ahamove trong năm qua",
 };
 

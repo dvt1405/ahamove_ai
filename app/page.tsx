@@ -246,6 +246,7 @@ export default function Home() {
     }, [data, selectedHero, user]);
     const [autoPlay, setAutoPlay] = useState<boolean>(false);
     const timerRef = useRef<number | null>(null);
+    const [showSlideshow, setShowSlideshow] = useState<boolean>(false);
 
     useEffect(() => {
         if (!autoPlay || totalSlides === 0) return;
@@ -299,6 +300,7 @@ export default function Home() {
             const json = (await resp.json()) as GenerateResponse;
             setData(json);
             setSelectedHero(json.defaultHeroIndex ?? 0);
+            setShowSlideshow(true);
         } catch (e: any) {
             setError(e?.message || "Có lỗi xảy ra");
         } finally {
@@ -314,6 +316,23 @@ export default function Home() {
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
     }, [goPrev, goNext]);
+
+    // Handle ESC to close fullscreen and lock scroll when open
+    useEffect(() => {
+        if (!showSlideshow) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === "Escape") setShowSlideshow(false);
+            if (e.key === "ArrowLeft") goPrev();
+            if (e.key === "ArrowRight") goNext();
+        };
+        const prevOverflow = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        window.addEventListener("keydown", onKey);
+        return () => {
+            document.body.style.overflow = prevOverflow;
+            window.removeEventListener("keydown", onKey);
+        };
+    }, [showSlideshow, goPrev, goNext]);
 
     const renderImageSlide = (idx: number) => {
         if (!data) return null;
@@ -434,6 +453,71 @@ export default function Home() {
         );
     };
 
+    // Fullscreen popup with 9:16 aspect at full height
+    const renderFullscreenSlide = () => {
+        if (!data) return null;
+        const imageSlides = data.images.length;
+        const isUserSlide = current === imageSlides;
+        const isHeroSlide = current === imageSlides + 1;
+
+        if (!isUserSlide && !isHeroSlide) {
+            const img = data.images[current];
+            const story = data.stories[current] ?? "";
+            return (
+                <div className="absolute inset-0">
+                    <img src={img} alt={`Trang ${current + 1}`} className="absolute inset-0 h-full w-full object-cover"/>
+                    {/* Caption overlay with typing */}
+                    {story && (
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent p-4 sm:p-6">
+                            <Typewriter text={story} speed={22} startDelay={350}
+                                        className="block whitespace-pre-wrap text-base leading-relaxed text-white/95"/>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        if (isUserSlide) {
+            const u = data.userSlide;
+            const s = u.stats;
+            return (
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-white">
+                    <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom,rgba(255,255,255,0.08),transparent_60%)]"/>
+                    <Typewriter text={u.title} startDelay={200} speed={24}
+                                className="mb-4 text-center text-2xl font-semibold sm:text-3xl"/>
+                    <div className="mb-4 grid w-full max-w-md grid-cols-2 gap-2 text-center text-sm">
+                        <div className="rounded-lg bg-white/10 px-3 py-2 backdrop-blur">Đơn: <b>{s.completedOrders}</b></div>
+                        <div className="rounded-lg bg-white/10 px-3 py-2 backdrop-blur">Tài xế tin cậy: <b>{s.reliableShippers}</b></div>
+                        <div className="rounded-lg bg-white/10 px-3 py-2 backdrop-blur">TB (phút): <b>{s.avgDeliveryMins}</b></div>
+                        <div className="rounded-lg bg-white/10 px-3 py-2 backdrop-blur">Nhanh nhất: <b>{s.fastestDeliveryMins}</b></div>
+                    </div>
+                    <Typewriter text={u.summary} startDelay={900} speed={18}
+                                className="mx-auto max-w-md text-center text-base leading-relaxed text-white/90"/>
+                </div>
+            );
+        }
+
+        // Hero slide
+        const heroList = data.heroes;
+        const selected = selectedHero ?? data.defaultHeroIndex ?? 0;
+        const heroName = heroList[selected];
+        return (
+            <div className="absolute inset-0">
+                <img src={getHeroPreview(heroName)} alt={heroName}
+                     className="absolute inset-0 h-full w-full object-cover"/>
+                <div className="absolute inset-0 bg-black/35"/>
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center text-white">
+                    <Typewriter text={"Anh hùng của bạn"} startDelay={150} speed={28}
+                                className="text-sm uppercase tracking-wide text-white/80"/>
+                    <Typewriter text={heroName} startDelay={450} speed={30}
+                                className="mt-2 text-3xl font-semibold sm:text-4xl"/>
+                    <Typewriter text={"Hãy chọn và bắt đầu hành trình mới cùng Ahamove"} startDelay={900} speed={22}
+                                className="mt-4 max-w-md text-base leading-relaxed text-white/90"/>
+                </div>
+            </div>
+        );
+    };
+
     const content = () => {
         if (loading) {
             return (
@@ -481,8 +565,16 @@ export default function Home() {
                             Tự động chạy
                         </label>
                     </div>
-                    <div className="text-sm text-zinc-600 dark:text-zinc-400">
-                        {current + 1} / {totalSlides}
+                    <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+                        <button
+                            className="rounded-full border px-3 py-1 hover:bg-black/5 dark:hover:bg-white/5"
+                            onClick={() => setShowSlideshow(true)}
+                        >
+                            Mở toàn màn hình
+                        </button>
+                        <span>
+                            {current + 1} / {totalSlides}
+                        </span>
                     </div>
                 </div>
 
@@ -626,6 +718,61 @@ export default function Home() {
 
                 {content()}
 
+                {showSlideshow && (
+                    <div
+                        className="fixed inset-0 z-50 flex items-center justify-center"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label="Trình chiếu toàn màn hình"
+                        onClick={() => setShowSlideshow(false)}
+                    >
+                        {/* Backdrop */}
+                        <div className="absolute inset-0 bg-black/80"/>
+
+                        {/* 9:16 container at full viewport height */}
+                        <div
+                            className="relative mx-auto overflow-hidden rounded-xl shadow-2xl ring-1 ring-white/10"
+                            style={{height: "100vh", aspectRatio: "9 / 16"}}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            {/* Slide content */}
+                            {renderFullscreenSlide()}
+
+                            {/* Controls overlay */}
+                            <div className="pointer-events-auto absolute inset-x-0 top-0 flex items-center justify-between p-3 text-white">
+                                <button
+                                    className="rounded-full bg-white/10 px-3 py-1 text-sm backdrop-blur hover:bg-white/20"
+                                    onClick={() => setShowSlideshow(false)}
+                                >
+                                    Đóng
+                                </button>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={goPrev}
+                                        className="rounded-full bg-white/10 px-3 py-1 text-sm backdrop-blur hover:bg-white/20"
+                                        aria-label="Trang trước"
+                                    >
+                                        ◀
+                                    </button>
+                                    <button
+                                        onClick={goNext}
+                                        className="rounded-full bg-white/10 px-3 py-1 text-sm backdrop-blur hover:bg-white/20"
+                                        aria-label="Trang sau"
+                                    >
+                                        ▶
+                                    </button>
+                                    <label className="ml-2 inline-flex items-center gap-2 text-xs">
+                                        <input type="checkbox" checked={autoPlay}
+                                               onChange={(e) => setAutoPlay(e.target.checked)}/>
+                                        Tự động
+                                    </label>
+                                    <span className="ml-2 text-sm opacity-90">{current + 1} / {totalSlides}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <footer className="mt-8 text-center text-xs text-zinc-500 dark:text-zinc-400">
                     Mẹo: Thiết lập biến môi trường GOOGLE_API_KEY (và tùy chọn: GEMINI_IMAGE_MODEL, GEMINI_TEXT_MODEL) ở
                     server để tạo hình và câu chuyện thật. Nếu thiếu, hệ thống sẽ dùng ảnh minh họa.
@@ -650,6 +797,57 @@ function Spinner() {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
         </svg>
+    );
+}
+
+// Simple typewriter effect for beautiful hero typing animation
+function Typewriter({
+    text,
+    speed = 28,
+    startDelay = 200,
+    className,
+    caret = true,
+}: {
+    text: string;
+    speed?: number; // ms per character
+    startDelay?: number; // initial delay before typing
+    className?: string;
+    caret?: boolean;
+}) {
+    const [shown, setShown] = useState("");
+    const timerRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        // Reset and type again on text change
+        if (timerRef.current) {
+            window.clearTimeout(timerRef.current);
+            timerRef.current = null;
+        }
+        setShown("");
+        const run = () => {
+            let i = 0;
+            const step = () => {
+                i++;
+                setShown(text.slice(0, i));
+                if (i < text.length) {
+                    timerRef.current = window.setTimeout(step, Math.max(5, speed));
+                }
+            };
+            step();
+        };
+        timerRef.current = window.setTimeout(run, Math.max(0, startDelay));
+        return () => {
+            if (timerRef.current) window.clearTimeout(timerRef.current);
+        };
+    }, [text, speed, startDelay]);
+
+    return (
+        <span className={className}>
+            {shown}
+            {caret && (
+                <span className="ml-0.5 inline-block h-[1em] w-[2px] align-[-0.12em] animate-pulse bg-current"></span>
+            )}
+        </span>
     );
 }
 
