@@ -1,6 +1,6 @@
 "use client";
 
-import {useCallback, useEffect, useMemo, useRef, useState} from "react";
+import {useCallback, useEffect, useMemo, useRef, useState, createElement} from "react";
 
 // Allow custom web component in TSX
 declare global {
@@ -1115,11 +1115,13 @@ function LottieOverlay({ src, visible, playKey, loop = true, className }: { src:
     const canUse = typeof window !== 'undefined' && (window as any).customElements && (window as any).customElements.get && (window as any).customElements.get('dotlottie-player');
     if (!canUse) return null;
     const safeSrc = (() => { try { return encodeURI(src); } catch { return src; } })();
+    // Use an any-typed alias to avoid TS complaining about custom element in JSX during build
+    const DotLottie: any = 'dotlottie-player';
     return (
         <div className={"pointer-events-none absolute inset-0 z-10 " + (className || "")}
              aria-hidden="true"
         >
-            <dotlottie-player
+            <DotLottie
                 key={playKey}
                 src={safeSrc}
                 autoplay
