@@ -601,9 +601,9 @@ export default function Home() {
                     )}
                     {/* Caption overlay with typing */}
                     {story && (
-                        <div className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/70 via-black/30 to-transparent p-4 sm:p-6">
+                        <div className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/95 via-black/70 to-transparent px-4 py-3 sm:px-6 sm:py-4">
                             <Typewriter text={story} speed={22} startDelay={350}
-                                        className="relative z-30 block whitespace-pre-wrap text-base leading-relaxed text-white/95"/>
+                                        className="relative z-30 block whitespace-pre-wrap text-base leading-relaxed text-white drop-shadow-md"/>
                         </div>
                     )}
                 </div>
