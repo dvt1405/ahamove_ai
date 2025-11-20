@@ -16,26 +16,15 @@ const HERO_PREVIEWS: Record<string, string[]> = {
     "/chuyen_gia_trai_nghiem_khach_hang.png",
   ],
   "Người dẫn đầu tốc độ": [
-    "/Người dẫn đầu tốc độ.png",
-    "/Người dẫn đầu tốc độ.png",
     "/nguoi_dan_dau_toc_do.png",
   ],
   "Người gìn giữ độ tin cậy": [
-    "/Người gìn giữ độ tin cậy.png",
-    "/Người gìn giữ độ tin cậy .png",
-    "/Người gìn giữ độ tin cậy .png",
     "/nguoi_gin_giu_do_tin_cay.png",
   ],
   "Nhà đổi mới logistics": [
-    "/Nhà đổi mới logistics.png",
-    "/ Nhà đổi mới logistics.png",
-    "/Nhà đổi mới logistics.png",
-    "/nha_doi_moi_logistics.png",
+    "/nha_doi_moi_logitics.png",
   ],
   "Người tiên phong dữ liệu": [
-    "/Người tiên phong dữ liệu.png",
-    "/ Người tiên phong dữ liệu .png",
-    "/Người tiên phong dữ liệu .png",
     "/nguoi_tien_phong_du_lieu.png",
   ],
 };

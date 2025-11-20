@@ -66,9 +66,8 @@ export async function generateImagesViaGemini(
   const desiredModel = modelId || process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image";
   const model = /imagegeneration/i.test(desiredModel) ? "gemini-2.5-flash-image" : desiredModel;
 
-  // Create a client (reuse module client if compatible, otherwise create scoped)
-  const client = apiKey ? new GoogleGenAI({ apiKey: key }) : ai;
-  if (!client) throw new Error("Không khởi tạo được GoogleGenAI client");
+  // Create a dedicated client from the resolved key to avoid undefined narrowing issues
+  const client = new GoogleGenAI({ apiKey: key });
 
   const images: string[] = [];
   const total = Math.max(1, Math.min(6, Number(count) || 1));
