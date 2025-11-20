@@ -258,12 +258,17 @@ export default function Home() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [data, setData] = useState<GenerateResponse | null>(null);
+    const [showSlideshow, setShowSlideshow] = useState<boolean>(false);
 
     const totalSlides = useMemo(() => {
         if (!data) return 0;
-        // image slides + user slide + hero slide
-        return data.images.length + 2;
-    }, [data]);
+        const base = data.images.length + 2; // images + user + hero
+        return showSlideshow ? base + 1 : base; // add missions only in popup
+    }, [data, showSlideshow]);
+
+    // Slide indices for special pages
+    const heroSlideIndex = useMemo(() => (data ? data.images.length + 1 : -1), [data]);
+    const missionsSlideIndex = useMemo(() => (data ? data.images.length + 2 : -1), [data]);
 
     const [current, setCurrent] = useState(0);
     const [selectedHero, setSelectedHero] = useState<number | null>(null);
@@ -272,9 +277,23 @@ export default function Home() {
         const heroName = data.heroes[selectedHero] || "";
         return buildMissions(heroName, user);
     }, [data, selectedHero, user]);
+
     const [autoPlay, setAutoPlay] = useState<boolean>(false);
+
+    // After selecting a hero in fullscreen, auto-advance to Missions slide
+    useEffect(() => {
+        if (!showSlideshow) return;
+        if (!data) return;
+        if (selectedHero == null) return;
+        if (current !== heroSlideIndex) return;
+        if (missionsSlideIndex < 0) return;
+        const id = window.setTimeout(() => {
+            setCurrent(missionsSlideIndex);
+            setAutoPlay(false);
+        }, 600);
+        return () => window.clearTimeout(id);
+    }, [showSlideshow, data, selectedHero, current, heroSlideIndex, missionsSlideIndex]);
     const timerRef = useRef<number | null>(null);
-    const [showSlideshow, setShowSlideshow] = useState<boolean>(false);
     const [prevCurrent, setPrevCurrent] = useState<number>(0);
     const [slideDir, setSlideDir] = useState<"left" | "right">("right");
     // Lottie effect state
@@ -567,8 +586,10 @@ export default function Home() {
         const imageSlides = data.images.length;
         const isUserSlide = current === imageSlides;
         const isHeroSlide = current === imageSlides + 1;
+        const isMissionsSlide = current === missionsSlideIndex; // only valid when popup is open
 
-        if (!isUserSlide && !isHeroSlide) {
+        // Image slides (bounds-safe)
+        if (current < imageSlides) {
             const img = data.images[current];
             const story = data.stories[current] ?? "";
             return (
@@ -614,60 +635,113 @@ export default function Home() {
         }
 
         // Hero slide (fullscreen with selectable hero list)
-        const heroList = data.heroes;
-        const selected = selectedHero ?? data.defaultHeroIndex ?? 0;
-        const defIdx = computeDefaultHeroIndex(user, heroList);
-        const heroName = heroList[selected];
-        return (
-            <div className="absolute inset-0">
-                <img src={getHeroPreview(heroName)} alt={heroName}
-                     className="absolute inset-0 h-full w-full object-cover"/>
-                {/* Lottie celebration overlay */}
-                {effectSrc && (
-                    <LottieOverlay src={effectSrc} visible={effectVisible} playKey={effectKey} loop={true} />
-                )}
-                {/* Dim layer for readability */}
-                <div className="absolute inset-0 z-20 bg-black/35"/>
-                {/* Content */}
-                <div className="absolute inset-0 z-30 flex flex-col p-4 sm:p-6 text-white overflow-y-auto">
-                    <div className="mb-3 text-center">
-                        <Typewriter text={"Chọn anh hùng của bạn"} startDelay={150} speed={26}
-                                    className="text-sm uppercase tracking-wide text-white/80"/>
-                        <Typewriter text={heroName} startDelay={420} speed={28}
-                                    className="mt-1 text-2xl font-semibold sm:text-3xl"/>
-                        <div className="mt-1 text-xs opacity-90">Mặc định: {heroList[defIdx]}</div>
-                    </div>
-                    <div className="mx-auto w-full max-w-[520px]">
-                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                            {heroList.map((h, i) => {
-                                const active = i === selected;
-                                return (
-                                    <button
-                                        key={h}
-                                        onClick={() => setSelectedHero(i)}
-                                        className={
-                                            "rounded-xl border p-2 text-left text-xs transition-colors focus:outline-none " +
-                                            (active
-                                                ? "border-orange-500 bg-orange-500/10 text-orange-100"
-                                                : "border-white/20 hover:bg-white/10")
-                                        }
-                                        aria-pressed={active}
-                                        aria-label={`Chọn anh hùng ${h}`}
-                                    >
-                                        <div className="aspect-square w-full overflow-hidden rounded-lg">
-                                            <SmartImage candidates={getHeroCandidates(h)} alt={h}
-                                                        className="h-full w-full object-cover"/>
-                                        </div>
-                                        <div className="mt-2 font-medium leading-snug">{h}</div>
-                                        {active && <div className="mt-1 text-[10px] opacity-80">Đã chọn</div>}
-                                    </button>
-                                );
-                            })}
+        if (isHeroSlide) {
+            const heroList = data.heroes;
+            const selected = selectedHero ?? data.defaultHeroIndex ?? 0;
+            const defIdx = computeDefaultHeroIndex(user, heroList);
+            const heroName = heroList[selected];
+            return (
+                <div className="absolute inset-0">
+                    <img src={getHeroPreview(heroName)} alt={heroName}
+                         className="absolute inset-0 h-full w-full object-cover"/>
+                    {/* Lottie celebration overlay */}
+                    {effectSrc && (
+                        <LottieOverlay src={effectSrc} visible={effectVisible} playKey={effectKey} loop={true} />
+                    )}
+                    {/* Dim layer for readability */}
+                    <div className="absolute inset-0 z-20 bg-black/35"/>
+                    {/* Content */}
+                    <div className="absolute inset-0 z-30 flex flex-col p-4 sm:p-6 text-white overflow-y-auto">
+                        <div className="mb-3 text-center">
+                            <Typewriter text={"Chọn anh hùng của bạn"} startDelay={150} speed={26}
+                                        className="text-sm uppercase tracking-wide text-white/80"/>
+                            <Typewriter text={heroName} startDelay={420} speed={28}
+                                        className="mt-1 text-2xl font-semibold sm:text-3xl"/>
+                            <div className="mt-1 text-xs opacity-90">Mặc định: {heroList[defIdx]}</div>
+                        </div>
+                        <div className="mx-auto w-full max-w-[520px]">
+                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                                {heroList.map((h, i) => {
+                                    const active = i === selected;
+                                    return (
+                                        <button
+                                            key={h}
+                                            onClick={() => setSelectedHero(i)}
+                                            className={
+                                                "rounded-xl border p-2 text-left text-xs transition-colors focus:outline-none " +
+                                                (active
+                                                    ? "border-orange-500 bg-orange-500/10 text-orange-100"
+                                                    : "border-white/20 hover:bg-white/10")
+                                            }
+                                            aria-pressed={active}
+                                            aria-label={`Chọn anh hùng ${h}`}
+                                        >
+                                            <div className="aspect-square w-full overflow-hidden rounded-lg">
+                                                <SmartImage candidates={getHeroCandidates(h)} alt={h}
+                                                            className="h-full w-full object-cover"/>
+                                            </div>
+                                            <div className="mt-2 font-medium leading-snug">{h}</div>
+                                            {active && <div className="mt-1 text-[10px] opacity-80">Đã chọn</div>}
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        );
+            );
+        }
+
+        // Missions slide (after hero selection)
+        if (isMissionsSlide) {
+            const heroList = data.heroes;
+            const selected = selectedHero ?? data.defaultHeroIndex ?? 0;
+            const heroName = heroList[selected] || "";
+            const payloadUser = {
+                completedOrders: Number(user.completedOrders) || 0,
+                serviceIds: parseCsv(user.serviceIdsInput),
+                subscriptions: parseCsv(user.subscriptionsInput),
+                totalSpentVnd: Number(user.totalSpentVnd) || 0,
+                dateRange: user.dateRange || "12 tháng qua",
+            };
+            return (
+                <div className="absolute inset-0">
+                    <img src={getHeroPreview(heroName)} alt={heroName}
+                         className="absolute inset-0 h-full w-full object-cover"/>
+                    {effectSrc && (
+                        <LottieOverlay src={effectSrc} visible={effectVisible} playKey={effectKey} loop={true} />
+                    )}
+                    <div className="absolute inset-0 z-20 bg-black/45"/>
+                    <div className="absolute inset-0 z-30 flex flex-col p-4 sm:p-6 text-white overflow-y-auto" aria-roledescription="trang nhiệm vụ">
+                        <div className="mb-3 flex items-center justify-between">
+                            <button
+                                onClick={() => setCurrent(heroSlideIndex)}
+                                className="rounded-full bg-white/10 px-3 py-1 text-sm backdrop-blur hover:bg-white/20"
+                                aria-label="Quay lại chọn anh hùng"
+                            >
+                                ← Quay lại
+                            </button>
+                            <div className="text-sm opacity-90">Anh hùng: <span className="font-medium">{heroName}</span></div>
+                        </div>
+                        <div className="mb-2 text-center">
+                            <Typewriter text={"Nhiệm vụ để hiện thực hóa “anh hùng” của bạn"} startDelay={180} speed={22}
+                                        className="text-lg font-semibold sm:text-xl"/>
+                            <div className="mt-1 text-xs text-white/80">Chọn một nhiệm vụ bên dưới để bắt đầu ngay.</div>
+                        </div>
+                        <div className="mx-auto w-full max-w-[720px]">
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                {missions.map((m) => (
+                                    <MissionCard key={m.id} m={m} heroName={heroName} userPayload={payloadUser} slideshowImages={data.images} />
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Fallback (shouldn't happen)
+        return null;
     };
 
     const content = () => {
@@ -731,7 +805,7 @@ export default function Home() {
                 </div>
 
                 <div className="rounded-2xl border border-black/10 p-4 dark:border-white/10">
-                    {isUserSlide ? renderUserSlide() : isHeroSlide ? renderHeroSlide() : renderImageSlide(current)}
+                    {current < imageSlides ? renderImageSlide(current) : (isUserSlide ? renderUserSlide() : renderHeroSlide())}
                 </div>
 
                 <div className="mt-4 flex flex-wrap items-center gap-2" role="tablist" aria-label="Chỉ báo trang">
