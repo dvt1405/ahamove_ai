@@ -2,6 +2,85 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+// Hero preview images mapping (paths under /public). For robustness we provide multiple filename candidates
+// (original diacritics, variants with accidental spaces, and slug versions). The UI will try them in order and
+// fall back to /globe.svg if none exists.
+const HERO_PREVIEWS: Record<string, string[]> = {
+  "Bậc thầy tối ưu lộ trình": [
+    "/bac_thay_toi_ui.png",
+  ],
+  "Người bán hàng xuất sắc nhất thế giới": [
+    "/Generated Image November 20, 2025 - 4_26PM.png",
+  ],
+  "Chuyên gia trải nghiệm khách hàng": [
+    "/chuyen_gia_trai_nghiem_khach_hang.png",
+  ],
+  "Người dẫn đầu tốc độ": [
+    "/Người dẫn đầu tốc độ.png",
+    "/Người dẫn đầu tốc độ.png",
+    "/nguoi_dan_dau_toc_do.png",
+  ],
+  "Người gìn giữ độ tin cậy": [
+    "/Người gìn giữ độ tin cậy.png",
+    "/Người gìn giữ độ tin cậy .png",
+    "/Người gìn giữ độ tin cậy .png",
+    "/nguoi_gin_giu_do_tin_cay.png",
+  ],
+  "Nhà đổi mới logistics": [
+    "/Nhà đổi mới logistics.png",
+    "/ Nhà đổi mới logistics.png",
+    "/Nhà đổi mới logistics.png",
+    "/nha_doi_moi_logistics.png",
+  ],
+  "Người tiên phong dữ liệu": [
+    "/Người tiên phong dữ liệu.png",
+    "/ Người tiên phong dữ liệu .png",
+    "/Người tiên phong dữ liệu .png",
+    "/nguoi_tien_phong_du_lieu.png",
+  ],
+};
+
+function getHeroCandidates(name: string): string[] {
+  const p = HERO_PREVIEWS[name];
+  if (!p && process?.env?.NODE_ENV !== "production") {
+    console.warn("Missing preview for hero:", name);
+  }
+  return p || [];
+}
+
+function getHeroPreview(name: string): string {
+  const candidates = getHeroCandidates(name);
+  if (!candidates || candidates.length === 0) return "/globe.svg";
+  const first = candidates[0];
+  try {
+    return encodeURI(first);
+  } catch {
+    return first || "/globe.svg";
+  }
+}
+
+function SmartImage({ candidates, alt, className }: { candidates: string[]; alt: string; className?: string }) {
+  const [idx, setIdx] = useState(0);
+  const list = useMemo(() => {
+    const enc = (candidates || []).map((p) => {
+      try { return encodeURI(p); } catch { return p; }
+    });
+    // Always push placeholder as last candidate
+    if (!enc.includes("/globe.svg")) enc.push("/globe.svg");
+    return enc;
+  }, [candidates]);
+  const src = list[Math.min(idx, list.length - 1)];
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      loading="lazy"
+      onError={() => setIdx((i) => Math.min(i + 1, list.length - 1))}
+    />
+  );
+}
+
 type GenerateResponse = {
   images: string[];
   stories: string[];
@@ -295,6 +374,7 @@ export default function Home() {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           {heroList.map((h, i) => {
             const active = i === selected;
+            const preview = getHeroPreview(h);
             return (
               <button
                 key={h}
@@ -308,7 +388,10 @@ export default function Home() {
                 aria-pressed={active}
                 aria-label={`Chọn anh hùng ${h}`}
               >
-                <div className="font-medium">{h}</div>
+                <div className="aspect-square w-full overflow-hidden rounded-lg">
+                  <SmartImage candidates={getHeroCandidates(h)} alt={h} className="h-full w-full object-cover" />
+                </div>
+                <div className="mt-2 font-medium leading-snug">{h}</div>
                 {active && <div className="mt-1 text-xs opacity-80">Đã chọn</div>}
               </button>
             );
@@ -316,6 +399,19 @@ export default function Home() {
         </div>
         <div className="mt-4 text-zinc-700 dark:text-zinc-300">
           Bạn đã chọn: <span className="font-semibold">{heroName}</span>
+        </div>
+        <div className="mt-3" aria-roledescription="xem trước anh hùng">
+          <div className="overflow-hidden rounded-xl border border-black/10 dark:border-white/10">
+            <img
+              src={getHeroPreview(heroName)}
+              alt={`Xem trước ${heroName}`}
+              className="max-h-80 w-full object-cover"
+              onError={(e) => {
+                const t = e.currentTarget as HTMLImageElement;
+                if (t.src !== location.origin + "/globe.svg") t.src = "/globe.svg";
+              }}
+            />
+          </div>
         </div>
 
         {/* Missions */}
