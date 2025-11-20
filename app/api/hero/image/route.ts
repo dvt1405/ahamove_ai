@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateImagesViaGemini } from "../../generate/gemini";
+import { generateImagesViaGemini, editImageWithGemini } from "../../generate/gemini";
 
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
@@ -35,6 +35,22 @@ function summarizeUser(user: any): string {
   const spent = typeof user?.totalSpentVnd === "number" ? new Intl.NumberFormat("vi-VN").format(user.totalSpentVnd) + "₫" : "không rõ";
   const range = user?.dateRange || "12 tháng qua";
   return `Đơn: ${completedOrders} • Dịch vụ: ${services} • Gói: ${subs} • Chi tiêu: ${spent} • Thời gian: ${range}`;
+}
+
+// --- Related image helpers ---
+const ALLOWED_MIME = new Set(["image/png", "image/jpeg", "image/webp"]);
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB
+
+function parseDataUrl(dataUrl: string): { mime: string; dataBase64: string; sizeBytes: number } | null {
+  if (typeof dataUrl !== "string") return null;
+  const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!m) return null;
+  const mime = m[1];
+  const b64 = m[2];
+  // rough size estimation
+  const len = b64.length;
+  const sizeBytes = Math.floor((len * 3) / 4) - (b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0);
+  return { mime, dataBase64: b64, sizeBytes };
 }
 
 export async function POST(req: NextRequest) {
@@ -90,10 +106,68 @@ Crisp, organized visual style, ideal for professional minimalistic slides.`,
       "Chi tiết cao, sạch, chuyên nghiệp, phù hợp làm slide ứng dụng.",
     ].join(" ");
 
-    const usedPrompt = promptOverride?.trim() || basePrompt;
+    const usedPromptBase = promptOverride?.trim() || basePrompt;
 
+    // New optional related-image inputs
+    const relatedImageDataUrl: string | undefined = body?.relatedImageDataUrl ? String(body.relatedImageDataUrl) : undefined;
+    const relatedImageMode: string = (body?.relatedImageMode || "text-to-image").toString();
+    let relatedImageStrength: number = Number(body?.relatedImageStrength);
+    if (!isFinite(relatedImageStrength)) relatedImageStrength = 0.6;
+    relatedImageStrength = Math.max(0.2, Math.min(0.9, relatedImageStrength));
+    const editNotes: string | undefined = body?.editNotes ? String(body.editNotes) : undefined;
+
+    let usedPrompt = usedPromptBase;
     let images: string[] = [];
 
+    const wantImageEdit = relatedImageMode === "image-to-image" && !!relatedImageDataUrl;
+
+    if (wantImageEdit) {
+      // Validate and parse data URL
+      const parsed = parseDataUrl(relatedImageDataUrl!);
+      if (!parsed) {
+        return NextResponse.json({ ok: false, error: "Ảnh liên quan không hợp lệ" }, { status: 400 });
+      }
+      if (!ALLOWED_MIME.has(parsed.mime)) {
+        return NextResponse.json({ ok: false, error: "Định dạng ảnh không hỗ trợ (chỉ PNG/JPEG/WEBP)" }, { status: 400 });
+      }
+      if (parsed.sizeBytes > MAX_IMAGE_BYTES) {
+        return NextResponse.json({ ok: false, error: "Ảnh quá lớn (tối đa 5MB)" }, { status: 400 });
+      }
+
+      // Build edit prompt with guidance
+      const editPrompt = [
+        usedPromptBase,
+          `Lookback 2025`,
+        `Stylize the uploaded image to match Ahamove hero style. Preserve the main composition while adapting colors, lighting, and subtle UI-floating elements (order history cards, stats, coins/xu). Avoid textual overlays and watermarks.`,
+        `Influence strength: ${relatedImageStrength} (0.2 = loose, 0.9 = strong).`,
+        `Respect aspect ratio guidance: ${aspectRatio}.`,
+        editNotes ? `User edit notes: ${editNotes}` : undefined,
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      usedPrompt = editPrompt;
+
+      if (GOOGLE_API_KEY) {
+        for (let i = 0; i < count; i++) {
+          try {
+            const promptVar = count > 1 ? `${editPrompt}\nVariation ${i + 1}.` : editPrompt;
+            const out = await editImageWithGemini(parsed.dataBase64, parsed.mime, promptVar);
+            if (out) images.push(out);
+          } catch (e) {
+            console.warn("/api/hero/image edit Gemini error:", e);
+          }
+        }
+      }
+
+      if (images.length < count) {
+        for (let i = images.length; i < count; i++) images.push(svgPlaceholder(userSummary));
+      }
+
+      return NextResponse.json({ ok: true, data: { images, usedPrompt } }, { status: 200 });
+    }
+
+    // Default: text-to-image flow (existing behavior)
     if (GOOGLE_API_KEY) {
       try {
         images = await generateImagesViaGemini(usedPrompt, count, aspectRatio, GOOGLE_API_KEY, GEMINI_IMAGE_MODEL);

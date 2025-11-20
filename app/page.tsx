@@ -16,34 +16,34 @@ declare global {
 // fall back to /globe.svg if none exists.
 const HERO_PREVIEWS: Record<string, string[]> = {
     "Bậc thầy tối ưu lộ trình": [
-        "/bac_thay_toi_ui.png",
+        "/ahamove-hero-1.png",
     ],
     "Người bán hàng xuất sắc nhất thế giới": [
-        "/Generated Image November 20, 2025 - 4_26PM.png",
+        "/ahamove-hero-2.png",
     ],
     "Chuyên gia trải nghiệm khách hàng": [
         "/chuyen_gia_trai_nghiem_khach_hang.png",
     ],
     "Người dẫn đầu tốc độ": [
-        "/nguoi_dan_dau_toc_do.png",
+        "/ahamove-hero-4.png",
     ],
     "Người gìn giữ độ tin cậy": [
-        "/nguoi_gin_giu_do_tin_cay.png",
+        "/ahamove-hero-5.png",
     ],
     "Nhà đổi mới logistics": [
-        "/nha_doi_moi_logitics.png",
+        "/ahamove-hero-3.png",
     ],
     "Người tiên phong dữ liệu": [
-        "/nguoi_tien_phong_du_lieu.png",
+        "/ahamove-hero-7.png",
     ],
     "Anh hùng bền vững": [
-        "/anh_hung_ben_vung.png",
+        "/ahamove-hero-8.png",
     ],
     "Người kết nối cộng đồng": [
-        "/nguoi_ket_noi_cong_dong.png",
+        "/ahamove-hero-9.png",
     ],
     "Nhà thiết kế tầm nhìn": [
-        "/nha_thiet_ke_tam_nhin.png"
+        "/ahamove-hero-10.png"
     ]
 };
 
@@ -259,19 +259,20 @@ export default function Home() {
     const [error, setError] = useState<string | null>(null);
     const [data, setData] = useState<GenerateResponse | null>(null);
     const [showSlideshow, setShowSlideshow] = useState<boolean>(false);
+    const [selectedHero, setSelectedHero] = useState<number | null>(null);
 
     const totalSlides = useMemo(() => {
         if (!data) return 0;
         const base = data.images.length + 2; // images + user + hero
-        return showSlideshow ? base + 1 : base; // add missions only in popup
-    }, [data, showSlideshow]);
+        // Add missions only in popup AND after a hero is selected
+        return showSlideshow && selectedHero != null ? base + 1 : base;
+    }, [data, showSlideshow, selectedHero]);
 
     // Slide indices for special pages
     const heroSlideIndex = useMemo(() => (data ? data.images.length + 1 : -1), [data]);
     const missionsSlideIndex = useMemo(() => (data ? data.images.length + 2 : -1), [data]);
 
     const [current, setCurrent] = useState(0);
-    const [selectedHero, setSelectedHero] = useState<number | null>(null);
     const missions = useMemo(() => {
         if (!data || selectedHero == null) return [] as Mission[];
         const heroName = data.heroes[selectedHero] || "";
@@ -379,21 +380,29 @@ export default function Home() {
 
     const goPrev = useCallback(() => {
         if (totalSlides === 0) return;
+        // If user is on Missions slide and goes back, clear the selected hero
+        if (showSlideshow && current === missionsSlideIndex) {
+            setSelectedHero(null);
+        }
         setSlideDir("left");
         setCurrent((c) => {
             setPrevCurrent(c);
             return (c - 1 + totalSlides) % totalSlides;
         });
-    }, [totalSlides]);
+    }, [totalSlides, showSlideshow, current, missionsSlideIndex]);
 
     const goNext = useCallback(() => {
         if (totalSlides === 0) return;
+        // Prevent advancing past the Hero slide until a hero is selected
+        if (showSlideshow && selectedHero == null && current === heroSlideIndex) {
+            return;
+        }
         setSlideDir("right");
         setCurrent((c) => {
             setPrevCurrent(c);
             return (c + 1) % totalSlides;
         });
-    }, [totalSlides]);
+    }, [totalSlides, showSlideshow, selectedHero, current, heroSlideIndex]);
 
     const handleGenerate = async () => {
         try {
@@ -425,8 +434,7 @@ export default function Home() {
             }
             const json = (await resp.json()) as GenerateResponse;
             setData(json);
-            const computedDefault = computeDefaultHeroIndex(user, json.heroes || []);
-            setSelectedHero(computedDefault);
+            // Do not preselect a hero; wait for user to choose
             setShowSlideshow(true);
             setAutoPlay(true);
         } catch (e: any) {
@@ -507,8 +515,8 @@ export default function Home() {
     const renderHeroSlide = () => {
         if (!data) return null;
         const heroList = data.heroes;
-        const selected = selectedHero ?? data.defaultHeroIndex ?? 0;
-        const heroName = heroList[selected];
+        const selected = selectedHero;
+        const heroName = selected != null ? heroList[selected] : "";
         const payloadUser = {
             completedOrders: Number(user.completedOrders) || 0,
             serviceIds: parseCsv(user.serviceIdsInput),
@@ -548,7 +556,11 @@ export default function Home() {
                     })}
                 </div>
                 <div className="mt-4 text-zinc-700 dark:text-zinc-300">
-                    Bạn đã chọn: <span className="font-semibold">{heroName}</span>
+                    {selected != null ? (
+                        <>Bạn đã chọn: <span className="font-semibold">{heroName}</span></>
+                    ) : (
+                        <span>Chưa chọn anh hùng. Vui lòng chọn để hiển thị nhiệm vụ.</span>
+                    )}
                 </div>
                 <div className="mt-3" aria-roledescription="xem trước anh hùng">
                     <div className="overflow-hidden rounded-xl border border-black/10 dark:border-white/10">
@@ -565,17 +577,18 @@ export default function Home() {
                 </div>
 
                 {/* Missions */}
-                <div className="mt-6">
-                    <h3 className="text-xl font-semibold">Nhiệm vụ để hiện thực hóa “anh hùng” của bạn</h3>
-                    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Chọn một nhiệm vụ bên dưới để bắt đầu
-                        ngay.</p>
-                    <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        {missions.map((m) => (
-                            <MissionCard key={m.id} m={m} heroName={heroName} userPayload={payloadUser}
-                                         slideshowImages={data.images}/>
-                        ))}
+                {selected != null && (
+                    <div className="mt-6">
+                        <h3 className="text-xl font-semibold">Nhiệm vụ để hiện thực hóa “anh hùng” của bạn</h3>
+                        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Chọn một nhiệm vụ bên dưới để bắt đầu ngay.</p>
+                        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            {missions.map((m) => (
+                                <MissionCard key={m.id} m={m} heroName={heroName} userPayload={payloadUser}
+                                             slideshowImages={data.images}/>
+                            ))}
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
         );
     };
@@ -637,13 +650,17 @@ export default function Home() {
         // Hero slide (fullscreen with selectable hero list)
         if (isHeroSlide) {
             const heroList = data.heroes;
-            const selected = selectedHero ?? data.defaultHeroIndex ?? 0;
+            const selected = selectedHero;
             const defIdx = computeDefaultHeroIndex(user, heroList);
-            const heroName = heroList[selected];
+            const heroName = selected != null ? heroList[selected] : "";
             return (
                 <div className="absolute inset-0">
-                    <img src={getHeroPreview(heroName)} alt={heroName}
-                         className="absolute inset-0 h-full w-full object-cover"/>
+                    {selected != null ? (
+                        <img src={getHeroPreview(heroName)} alt={heroName}
+                             className="absolute inset-0 h-full w-full object-cover"/>
+                    ) : (
+                        <div className="absolute inset-0 h-full w-full bg-gradient-to-b from-zinc-900 via-black to-zinc-900"/>
+                    )}
                     {/* Lottie celebration overlay */}
                     {effectSrc && (
                         <LottieOverlay src={effectSrc} visible={effectVisible} playKey={effectKey} loop={true} />
@@ -655,8 +672,12 @@ export default function Home() {
                         <div className="mb-3 text-center">
                             <Typewriter text={"Chọn anh hùng của bạn"} startDelay={150} speed={26}
                                         className="text-sm uppercase tracking-wide text-white/80"/>
-                            <Typewriter text={heroName} startDelay={420} speed={28}
-                                        className="mt-1 text-2xl font-semibold sm:text-3xl"/>
+                            {selected != null ? (
+                                <Typewriter text={heroName} startDelay={420} speed={28}
+                                            className="mt-1 text-2xl font-semibold sm:text-3xl"/>
+                            ) : (
+                                <div className="mt-1 text-base opacity-90">Hãy chọn một anh hùng để tiếp tục</div>
+                            )}
                             <div className="mt-1 text-xs opacity-90">Mặc định: {heroList[defIdx]}</div>
                         </div>
                         <div className="mx-auto w-full max-w-[520px]">
@@ -695,8 +716,8 @@ export default function Home() {
         // Missions slide (after hero selection)
         if (isMissionsSlide) {
             const heroList = data.heroes;
-            const selected = selectedHero ?? data.defaultHeroIndex ?? 0;
-            const heroName = heroList[selected] || "";
+            const selected = selectedHero;
+            const heroName = selected != null ? heroList[selected] : "";
             const payloadUser = {
                 completedOrders: Number(user.completedOrders) || 0,
                 serviceIds: parseCsv(user.serviceIdsInput),
@@ -706,16 +727,20 @@ export default function Home() {
             };
             return (
                 <div className="absolute inset-0">
+                    {/* Dark base background */}
+                    <div className="absolute inset-0 bg-zinc-950"/>
+                    {/* Background image at 40% opacity */}
                     <img src={getHeroPreview(heroName)} alt={heroName}
-                         className="absolute inset-0 h-full w-full object-cover"/>
+                         className="absolute inset-0 h-full w-full object-cover opacity-40"/>
                     {effectSrc && (
                         <LottieOverlay src={effectSrc} visible={effectVisible} playKey={effectKey} loop={true} />
                     )}
-                    <div className="absolute inset-0 z-20 bg-black/45"/>
+                    {/* Strong dark overlay for readability */}
+                    <div className="absolute inset-0 z-20 bg-black/70"/>
                     <div className="absolute inset-0 z-30 flex flex-col p-4 sm:p-6 text-white overflow-y-auto" aria-roledescription="trang nhiệm vụ">
                         <div className="mb-3 flex items-center justify-between">
                             <button
-                                onClick={() => setCurrent(heroSlideIndex)}
+                                onClick={() => { setSelectedHero(null); setCurrent(heroSlideIndex); }}
                                 className="rounded-full bg-white/10 px-3 py-1 text-sm backdrop-blur hover:bg-white/20"
                                 aria-label="Quay lại chọn anh hùng"
                             >
@@ -850,7 +875,7 @@ export default function Home() {
         <div className="flex min-h-screen items-start justify-center bg-zinc-50 font-sans dark:bg-black">
             <main className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-6 sm:p-10">
                 <header className="flex flex-col gap-2">
-                    <h1 className="text-3xl font-semibold tracking-tight">Trang trình chiếu AI Ahamove</h1>
+                    <h1 className="text-3xl font-semibold tracking-tight">Ahamove Loopback and Speedup</h1>
                     <p className="text-zinc-600 dark:text-zinc-400">Nhập thông tin sử dụng Ahamove trong năm qua. Hệ
                         thống sẽ tạo ~3 hình và câu chuyện tiếng Việt (≤ 100 từ), kèm slide tổng kết và slide chọn anh
                         hùng.</p>
